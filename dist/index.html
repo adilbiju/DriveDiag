@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#10120f" />
+    <meta name="description" content="Browser-based live OBD-II telemetry, sensor visualization, and diagnostics." />
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2310120f'/%3E%3Cpath d='M12 35h8l5-15 9 29 6-21 4 7h8' fill='none' stroke='%23ffb14a' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E" />
+    <title>OBD Pulse — Vehicle telemetry</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Primary navigation">
+        <a class="brand" href="#dashboard" aria-label="OBD Pulse home">
+          <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span>OBD<span>Pulse</span></span>
+        </a>
+
+        <nav class="nav-list">
+          <button class="nav-item is-active" data-view="dashboard" aria-current="page">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13a8 8 0 1 1 16 0M12 13l4-4M5 19h14"/></svg>
+            <span>Dashboard</span>
+          </button>
+          <button class="nav-item" data-view="sensors">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4v16M12 4v16M19 4v16M3 9h4M10 15h4M17 7h4"/></svg>
+            <span>Sensors</span>
+          </button>
+          <button class="nav-item" data-view="visualize">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18l5-6 4 3 7-9M4 21h16"/></svg>
+            <span>Visualize</span>
+          </button>
+          <button class="nav-item" data-view="diagnose">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l9 16H3L12 3zM12 9v4M12 17h.01"/></svg>
+            <span>Diagnose</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-foot">
+          <div class="adapter-card">
+            <div class="adapter-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M8 4v4M16 4v4M7 8h10v8H7zM9 16v4M15 16v4"/></svg>
+            </div>
+            <div><small>Adapter</small><strong id="adapterName">Not connected</strong></div>
+          </div>
+          <button class="connect-btn" id="connectButton">
+            <span class="status-dot"></span><span>Connect OBD</span>
+          </button>
+        </div>
+      </aside>
+
+      <main class="main-area">
+        <header class="topbar">
+          <button class="mobile-menu" id="mobileMenu" aria-label="Open navigation">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+          </button>
+          <div>
+            <p class="eyebrow">LIVE TELEMETRY</p>
+            <h1>Dashboard</h1>
+          </div>
+          <div class="topbar-meta">
+            <span class="connection-state"><i></i><span id="connectionLabel">Demo stream</span></span>
+            <span class="clock" id="clock">--:--:--</span>
+          </div>
+        </header>
+
+        <section class="view is-visible" id="dashboard" aria-labelledby="dashboard-title">
+          <h2 class="sr-only" id="dashboard-title">Live dashboard</h2>
+          <div class="dashboard-grid">
+            <article class="hero-gauge panel">
+              <div class="panel-heading">
+                <div><span class="kicker">Vehicle speed</span><strong>ROAD SPEED</strong></div>
+                <span class="live-tag">LIVE</span>
+              </div>
+              <div class="speed-stage">
+                <div class="speed-gauge" aria-label="Current speed 72 miles per hour">
+                  <svg viewBox="0 0 300 188" role="img">
+                    <path class="gauge-track" d="M42 156A112 112 0 0 1 258 156" />
+                    <path class="gauge-value" id="speedArc" d="M42 156A112 112 0 0 1 258 156" />
+                    <g class="gauge-ticks" id="speedTicks"></g>
+                  </svg>
+                  <div class="speed-readout"><strong id="speedValue">72</strong><span>MPH</span></div>
+                </div>
+                <div class="drive-stats">
+                  <div><span>Trip</span><strong id="tripValue">18.6 mi</strong></div>
+                  <div><span>Avg. speed</span><strong id="avgValue">48 mph</strong></div>
+                </div>
+              </div>
+            </article>
+
+            <article class="rpm-panel panel">
+              <div class="panel-heading">
+                <div><span class="kicker">Engine load</span><strong>ENGINE SPEED</strong></div>
+                <svg class="engine-icon" viewBox="0 0 28 28" aria-hidden="true"><path d="M7 8h13l4 4v9H6l-3-4v-6h4zM10 5h7M11 13h4v4h-4z"/></svg>
+              </div>
+              <div class="rpm-number"><strong id="rpmValue">2,840</strong><span>RPM</span></div>
+              <div class="rpm-bar"><i id="rpmBar"></i><b></b></div>
+              <div class="rpm-scale"><span>0</span><span>2</span><span>4</span><span>6</span><span>8 × 1000</span></div>
+              <div class="load-line"><span>Calculated load</span><strong id="loadValue">42%</strong></div>
+            </article>
+
+            <article class="metric-card panel temperature">
+              <div class="metric-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14.7V5a2 2 0 0 1 4 0v9.7a4 4 0 1 1-4 0zM12 8v8"/></svg></div>
+              <span>COOLANT TEMP</span><strong><b id="tempValue">196</b>°F</strong><div class="mini-bar"><i style="width:61%"></i></div><small>Normal range</small>
+            </article>
+            <article class="metric-card panel fuel">
+              <div class="metric-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4h10v17M4 21h13M8 8h4M15 8h2l2 3v7a2 2 0 0 0 2 2V9l-2-2"/></svg></div>
+              <span>FUEL LEVEL</span><strong><b id="fuelValue">68</b>%</strong><div class="mini-bar"><i style="width:68%"></i></div><small>Est. 284 mi remaining</small>
+            </article>
+            <article class="metric-card panel voltage">
+              <div class="metric-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14v12H5zM9 4h6v3M8 12h4M10 10v4M15 12h2"/></svg></div>
+              <span>CONTROL MODULE</span><strong><b id="voltageValue">14.2</b>V</strong><div class="mini-bar"><i style="width:72%"></i></div><small>Charging normally</small>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="sensors" aria-labelledby="sensors-heading">
+          <div class="section-intro">
+            <div><p class="kicker">MODE 01 · LIVE DATA</p><h2 id="sensors-heading">Sensor inventory</h2><p>Every standard PID this workspace can decode. Availability is confirmed when a vehicle connects.</p></div>
+            <div class="summary-chips"><span><b id="availableCount">18</b> available</span><span><b id="sensorRate">24</b> samples/sec</span></div>
+          </div>
+          <div class="sensor-toolbar panel">
+            <label class="search-box"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M16 16l5 5"/></svg><input id="sensorSearch" type="search" placeholder="Search sensors or PIDs" autocomplete="off" /></label>
+            <div class="segmented" role="group" aria-label="Filter sensors"><button class="is-selected" data-filter="all">All</button><button data-filter="available">Available</button><button data-filter="unavailable">Unavailable</button></div>
+          </div>
+          <div class="sensor-table panel">
+            <div class="sensor-row sensor-head"><span>Sensor</span><span>PID</span><span>Live value</span><span>Range</span><span>Status</span></div>
+            <div id="sensorRows"></div>
+          </div>
+        </section>
+
+        <section class="view" id="visualize" aria-labelledby="visualize-heading">
+          <div class="section-intro">
+            <div><p class="kicker">LIVE SIGNAL ANALYSIS</p><h2 id="visualize-heading">Visualize</h2><p>Overlay up to four signals. Each trace is normalized so different units remain easy to compare.</p></div>
+            <div class="chart-actions"><button class="quiet-btn" id="resetChart"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4v6h6M5 10a8 8 0 1 1-1 5"/></svg>Reset</button><button class="dark-btn" id="pauseChart"><span class="pause-icon">Ⅱ</span>Pause</button></div>
+          </div>
+          <div class="visual-grid">
+            <aside class="signal-picker panel">
+              <div class="picker-head"><strong>Signals</strong><span><b id="selectedCount">3</b>/4</span></div>
+              <label class="search-box compact"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M16 16l5 5"/></svg><input id="chartSearch" type="search" placeholder="Find a signal" autocomplete="off" /></label>
+              <div id="signalOptions" class="signal-options"></div>
+            </aside>
+            <div class="chart-panel panel">
+              <div class="chart-head">
+                <div><span>60 SECOND WINDOW</span><strong>LIVE COMPARISON</strong></div>
+                <span class="stream-state"><i></i><b id="streamText">STREAMING</b></span>
+              </div>
+              <div class="chart-wrap"><canvas id="liveChart" aria-label="Live chart of selected vehicle sensors"></canvas><div class="chart-y-labels"><span>100%</span><span>75%</span><span>50%</span><span>25%</span><span>0%</span></div></div>
+              <div class="chart-legend" id="chartLegend"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="diagnose" aria-labelledby="diagnose-heading">
+          <div class="section-intro">
+            <div><p class="kicker">MODE 03 · TROUBLE CODES</p><h2 id="diagnose-heading">Diagnose</h2><p>Read stored and pending DTCs from the engine control module.</p></div>
+            <button class="dark-btn" id="scanCodes"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4v6h6M5 10a8 8 0 1 1-1 5"/></svg>Scan again</button>
+          </div>
+          <div class="health-banner panel">
+            <div class="health-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 14h2l2-5 4 10 3-7 2 2h3"/></svg></div>
+            <div><span>POWERTRAIN HEALTH</span><strong id="healthTitle">2 issues need attention</strong><p id="healthCopy">Demo codes are shown until a vehicle is connected and scanned.</p></div>
+            <div class="issue-count"><strong id="issueCount">02</strong><span>CODES FOUND</span></div>
+          </div>
+          <div class="diagnostic-layout">
+            <div class="codes-list" id="codesList"></div>
+            <aside class="diagnostic-side panel">
+              <div class="side-block"><span>MONITOR STATUS</span><div class="monitor-row"><strong>Misfire</strong><em class="ready">Ready</em></div><div class="monitor-row"><strong>Fuel system</strong><em class="ready">Ready</em></div><div class="monitor-row"><strong>Catalyst</strong><em>Incomplete</em></div><div class="monitor-row"><strong>O₂ sensor</strong><em class="ready">Ready</em></div></div>
+              <div class="side-block"><span>VEHICLE INFO</span><div class="info-row"><small>Protocol</small><strong id="protocolValue">ISO 15765-4 CAN</strong></div><div class="info-row"><small>MIL status</small><strong id="milStatus">On</strong></div><div class="info-row"><small>Distance with MIL</small><strong id="milDistance">126 mi</strong></div></div>
+              <button class="danger-btn" id="clearCodes"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg>Clear trouble codes</button>
+              <p class="clear-note">Clearing codes also resets readiness monitors. Repair the underlying fault first.</p>
+            </aside>
+          </div>
+        </section>
+      </main>
+    </div>
+    <dialog class="connect-dialog" id="connectDialog" aria-labelledby="connect-title">
+      <form method="dialog" class="dialog-card">
+        <button class="dialog-close" value="cancel" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+        <div class="dialog-icon"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 3v26l8-7-16-12 8-7zM8 22l16-12"/></svg></div>
+        <p class="kicker">WEB BLUETOOTH</p>
+        <h2 id="connect-title">Connect an OBD adapter</h2>
+        <p>Plug your adapter into the vehicle, turn the ignition on, then choose it from your browser’s device list.</p>
+        <div class="compatibility-note"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></svg><span>Works with BLE adapters such as OBDLink CX and BLE ELM327 variants. Bluetooth Classic-only adapters cannot connect through Web Bluetooth.</span></div>
+        <button type="button" class="pair-btn" id="pairDevice"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18l6-5-12-8 6-5zM6 16l12-8"/></svg><span>Choose Bluetooth device</span></button>
+        <button type="button" class="demo-btn" id="useDemo">Continue with demo data</button>
+        <small class="privacy-note">The browser requires your approval before connecting. Data stays in this tab.</small>
+      </form>
+    </dialog>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="app.js"></script>
+  </body>
+</html>
