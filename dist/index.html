@@ -68,7 +68,7 @@
           <h2 class="sr-only" id="dashboard-title">Live dashboard</h2>
           <div class="connect-prompt panel" id="connectPrompt">
             <div class="prompt-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 4v4M16 4v4M7 8h10v8H7zM9 16v4M15 16v4"/></svg></div>
-            <div><span>VEHICLE NOT CONNECTED</span><strong>Connect your OBD-II adapter to begin</strong><p>Turn the ignition on, then select a compatible Bluetooth Low Energy adapter.</p></div>
+            <div><span>VEHICLE NOT CONNECTED</span><strong>Connect your OBD-II adapter to begin</strong><p>Turn the ignition on, then select your OBD-II adapter.</p></div>
             <button class="prompt-connect" id="dashboardConnect"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18l6-5-12-8 6-5zM6 16l12-8"/></svg>Connect OBD</button>
           </div>
           <div class="dashboard-grid">
@@ -185,7 +185,6 @@
         <p class="kicker">WEB BLUETOOTH</p>
         <h2 id="connect-title">Connect an OBD adapter</h2>
         <p>Plug your adapter into the vehicle, turn the ignition on, then find a compatible OBD device.</p>
-        <div class="compatibility-note"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7h.01"/></svg><span>The default list only shows devices with recognized OBD adapter names, hiding unknown devices. Bluetooth Classic-only adapters cannot connect through Web Bluetooth.</span></div>
         <button type="button" class="pair-btn" id="pairDevice"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18l6-5-12-8 6-5zM6 16l12-8"/></svg><span>Find OBD devices</span></button>
         <button type="button" class="all-devices-btn" id="showAllDevices">Adapter not listed? Show all devices</button>
         <button type="button" class="demo-btn" id="useDemo">Continue with demo data</button>
