@@ -43,16 +43,21 @@ const initialValues = {
   torqueRef: 320, gear: 5
 };
 
+const demoSupport = Object.fromEntries(SENSOR_DEFS.map((sensor) => [sensor.id, sensor.available]));
+const emptyValues = Object.fromEntries(SENSOR_DEFS.map((sensor) => [sensor.id, Number.NaN]));
+const demoCodes = [
+  { code: 'P0420', status: 'Stored', title: 'Catalyst system efficiency below threshold', detail: 'Bank 1 catalyst performance is outside the expected range.', domain: 'Emissions' },
+  { code: 'P0171', status: 'Pending', title: 'System too lean', detail: 'Bank 1 fuel trim indicates more air than expected.', domain: 'Fuel & air' }
+];
+SENSOR_DEFS.forEach((sensor) => { sensor.available = null; });
+
 const SERIES_COLORS = ['#f39a17', '#242924', '#6b9e2a', '#dc5b43'];
 const state = {
-  mode: 'demo', device: null, server: null, writeCharacteristic: null, notifyCharacteristic: null,
+  mode: 'idle', device: null, server: null, writeCharacteristic: null, notifyCharacteristic: null,
   responseBuffer: '', pendingCommand: null, pollTimer: null, pollingIndex: 0, suspendPolling: false,
-  values: { ...initialValues }, selected: ['rpm', 'speed', 'coolant'], history: {}, paused: false,
+  values: { ...emptyValues }, selected: [], history: {}, paused: false,
   sensorFilter: 'all', sensorSearch: '', chartSearch: '',
-  tripMiles: 18.6, speedSamples: [48], codes: [
-    { code: 'P0420', status: 'Stored', title: 'Catalyst system efficiency below threshold', detail: 'Bank 1 catalyst performance is outside the expected range.', domain: 'Emissions' },
-    { code: 'P0171', status: 'Pending', title: 'System too lean', detail: 'Bank 1 fuel trim indicates more air than expected.', domain: 'Fuel & air' }
-  ]
+  tripMiles: 0, speedSamples: [], codes: []
 };
 
 let toastTimer;
@@ -100,18 +105,29 @@ function renderTicks() {
 
 function updateDashboard() {
   const { speed, rpm, load, coolant, fuel, voltage } = state.values;
-  $('#speedValue').textContent = Math.round(speed || 0);
-  $('#rpmValue').textContent = Math.round(rpm || 0).toLocaleString();
-  $('#loadValue').textContent = `${Math.round(load || 0)}%`;
-  $('#tempValue').textContent = Math.round(coolant || 0);
-  $('#fuelValue').textContent = Math.round(fuel || 0);
-  $('#voltageValue').textContent = Number(voltage || 0).toFixed(1);
-  $('#tripValue').textContent = `${state.tripMiles.toFixed(1)} mi`;
-  const avg = state.speedSamples.reduce((sum, value) => sum + value, 0) / state.speedSamples.length;
-  $('#avgValue').textContent = `${Math.round(avg)} mph`;
-  $('#speedArc').style.strokeDashoffset = 351.8 * (1 - clamp((speed || 0) / 140, 0, 1));
-  $('#rpmBar').style.width = `${clamp((rpm || 0) / 8000, 0, 1) * 100}%`;
-  $('#speedValue').closest('.speed-gauge').setAttribute('aria-label', `Current speed ${Math.round(speed || 0)} miles per hour`);
+  const hasSpeed = Number.isFinite(speed);
+  const hasRpm = Number.isFinite(rpm);
+  $('#speedValue').textContent = hasSpeed ? Math.round(speed) : '—';
+  $('#rpmValue').textContent = hasRpm ? Math.round(rpm).toLocaleString() : '—';
+  $('#loadValue').textContent = Number.isFinite(load) ? `${Math.round(load)}%` : '—';
+  $('#tempValue').textContent = Number.isFinite(coolant) ? Math.round(coolant) : '—';
+  $('#fuelValue').textContent = Number.isFinite(fuel) ? Math.round(fuel) : '—';
+  $('#voltageValue').textContent = Number.isFinite(voltage) ? voltage.toFixed(1) : '—';
+  $('#tempValue').nextElementSibling.hidden = !Number.isFinite(coolant);
+  $('#fuelValue').nextElementSibling.hidden = !Number.isFinite(fuel);
+  $('#voltageValue').nextElementSibling.hidden = !Number.isFinite(voltage);
+  $('#tripValue').textContent = hasSpeed ? `${state.tripMiles.toFixed(1)} mi` : '—';
+  const avg = state.speedSamples.length ? state.speedSamples.reduce((sum, value) => sum + value, 0) / state.speedSamples.length : Number.NaN;
+  $('#avgValue').textContent = Number.isFinite(avg) ? `${Math.round(avg)} mph` : '—';
+  $('#speedArc').style.strokeDashoffset = 351.8 * (1 - clamp(hasSpeed ? speed / 140 : 0, 0, 1));
+  $('#rpmBar').style.width = `${clamp(hasRpm ? rpm / 8000 : 0, 0, 1) * 100}%`;
+  $('.temperature .mini-bar i').style.width = `${Number.isFinite(coolant) ? clamp((coolant - 100) / 1.5, 0, 100) : 0}%`;
+  $('.fuel .mini-bar i').style.width = `${Number.isFinite(fuel) ? clamp(fuel, 0, 100) : 0}%`;
+  $('.voltage .mini-bar i').style.width = `${Number.isFinite(voltage) ? clamp((voltage - 8) * 12.5, 0, 100) : 0}%`;
+  $('.temperature small').textContent = Number.isFinite(coolant) ? 'Live coolant reading' : 'Awaiting data';
+  $('.fuel small').textContent = Number.isFinite(fuel) ? 'Live tank level' : 'Awaiting data';
+  $('.voltage small').textContent = Number.isFinite(voltage) ? 'Live module voltage' : 'Awaiting data';
+  $('#speedValue').closest('.speed-gauge').setAttribute('aria-label', hasSpeed ? `Current speed ${Math.round(speed)} miles per hour` : 'Speed unavailable until an adapter connects');
 }
 
 function updateLiveValues() {
@@ -126,17 +142,18 @@ function renderSensorRows() {
   const query = state.sensorSearch.toLowerCase();
   const visible = SENSOR_DEFS.filter((sensor) => {
     const matchesText = `${sensor.name} ${sensor.pid} ${sensor.group}`.toLowerCase().includes(query);
-    const matchesFilter = state.sensorFilter === 'all' || (state.sensorFilter === 'available' ? sensor.available : !sensor.available);
+    const matchesFilter = state.sensorFilter === 'all' || (state.sensorFilter === 'available' ? sensor.available === true : sensor.available === false);
     return matchesText && matchesFilter;
   });
-  $('#availableCount').textContent = SENSOR_DEFS.filter((sensor) => sensor.available).length;
+  $('#availableCount').textContent = SENSOR_DEFS.filter((sensor) => sensor.available === true).length;
+  $('#sensorRate').textContent = state.mode === 'idle' ? '0' : state.mode === 'demo' ? '24' : 'Live';
   $('#sensorRows').innerHTML = visible.length ? visible.map((sensor) => `
     <div class="sensor-row">
       <div class="sensor-name"><span class="sensor-glyph">${sensor.group.slice(0, 2).toUpperCase()}</span><div><strong>${sensor.name}</strong><small>${sensor.group}</small></div></div>
       <span class="pid-code">01 ${sensor.pid}</span>
       <strong class="live-value" data-sensor-value="${sensor.id}">${formatValue(sensor, state.values[sensor.id])}</strong>
       <span class="sensor-range">${sensor.range}</span>
-      <span class="status-pill ${sensor.available ? '' : 'off'}">${sensor.available ? 'Available' : 'Not reported'}</span>
+      <span class="status-pill ${sensor.available === null ? 'unknown' : sensor.available ? '' : 'off'}">${sensor.available === null ? 'Awaiting scan' : sensor.available ? 'Available' : 'Not reported'}</span>
     </div>`).join('') : '<div class="empty-row">No sensors match this filter.</div>';
 }
 
@@ -249,10 +266,14 @@ function enrichCode(code, status = 'Stored') {
 
 function renderCodes() {
   $('#issueCount').textContent = String(state.codes.length).padStart(2, '0');
-  $('#healthTitle').textContent = state.codes.length ? `${state.codes.length} issue${state.codes.length === 1 ? '' : 's'} need attention` : 'No trouble codes reported';
-  $('#healthCopy').textContent = state.mode === 'demo' ? 'Demo codes are shown until a vehicle is connected and scanned.' : state.codes.length ? 'Codes were returned by the connected engine control module.' : 'The engine control module returned no stored or pending codes.';
-  $('#milStatus').textContent = state.codes.length ? 'On' : 'Off';
-  $('#codesList').innerHTML = state.codes.length ? state.codes.map((item) => `
+  const idle = state.mode === 'idle';
+  $('#healthTitle').textContent = idle ? 'Not connected' : state.codes.length ? `${state.codes.length} issue${state.codes.length === 1 ? '' : 's'} need attention` : 'No trouble codes reported';
+  $('#healthCopy').textContent = idle ? 'Connect an OBD adapter to scan the engine control module.' : state.mode === 'demo' ? 'Optional demo codes are shown. Connect a vehicle for a real scan.' : state.codes.length ? 'Codes were returned by the connected engine control module.' : 'The engine control module returned no stored or pending codes.';
+  $('#protocolValue').textContent = idle ? 'Awaiting connection' : state.mode === 'demo' ? 'Demo · ISO 15765-4' : 'ISO 15765-4 CAN';
+  $('#milStatus').textContent = idle ? '—' : state.codes.length ? 'On' : 'Off';
+  $('#milDistance').textContent = idle ? '—' : formatValue(sensorById('distanceMil'), state.values.distanceMil);
+  $$('.monitor-row em').forEach((element, index) => { element.textContent = idle ? '—' : index === 2 ? 'Incomplete' : 'Ready'; element.classList.toggle('ready', !idle && index !== 2); });
+  $('#codesList').innerHTML = idle ? '<div class="no-codes panel"><div><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4v4M16 4v4M7 8h10v8H7zM9 16v4M15 16v4"/></svg><h3>Connect to diagnose</h3><p>Select an OBD adapter before requesting trouble codes.</p></div></div>' : state.codes.length ? state.codes.map((item) => `
     <article class="code-card panel">
       <div class="code-id"><strong>${item.code}</strong><span>${item.status.toUpperCase()}</span></div>
       <div class="code-copy"><strong>${item.title}</strong><p>${item.detail}</p></div>
@@ -308,8 +329,16 @@ const UUIDS = {
 function setConnectionUI(label, connected) {
   $('#connectionLabel').textContent = label;
   $('.connection-state i').style.background = connected ? '#a7db4f' : '#a5a89e';
+  $('.connection-state i').style.boxShadow = connected ? '0 0 0 4px rgba(167,219,79,.14)' : 'none';
   $('.status-dot').style.background = connected ? '#a7db4f' : '#656961';
   $('#connectButton span:last-child').textContent = connected ? 'Disconnect' : 'Connect OBD';
+  $('#connectPrompt').hidden = connected || state.mode === 'demo';
+  $('.live-tag').textContent = connected ? 'LIVE' : state.mode === 'demo' ? 'DEMO' : 'OFFLINE';
+  $('.live-tag').classList.toggle('offline', !connected && state.mode !== 'demo');
+  $('#streamText').textContent = state.mode === 'idle' ? 'WAITING FOR VEHICLE' : state.paused ? 'PAUSED' : 'STREAMING';
+  $('.stream-state').classList.toggle('paused', state.mode === 'idle' || state.paused);
+  $('#pauseChart').disabled = state.mode === 'idle';
+  $('#resetChart').disabled = state.mode === 'idle';
 }
 
 async function connectBluetooth() {
@@ -344,8 +373,15 @@ async function connectBluetooth() {
     state.notifyCharacteristic.addEventListener('characteristicvaluechanged', handleNotification);
     state.mode = 'vehicle';
     clearInterval(demoTimer);
+    state.values = { ...emptyValues };
+    state.history = {};
+    state.codes = [];
+    state.tripMiles = 0;
+    state.speedSamples = [];
+    SENSOR_DEFS.forEach((sensor) => { sensor.available = null; });
     $('#adapterName').textContent = device.name || 'BLE OBD adapter';
     setConnectionUI(device.name || 'Vehicle connected', true);
+    renderSensorRows(); renderSignalOptions(); renderCodes(); updateLiveValues();
     $('#connectDialog').close();
     await initializeAdapter();
     await discoverSupportedPids();
@@ -353,7 +389,7 @@ async function connectBluetooth() {
     showToast(`${device.name || 'OBD adapter'} connected.`);
   } catch (error) {
     if (error.name !== 'NotFoundError') showToast(error.message || 'Could not connect to that adapter.');
-    if (!state.server?.connected) setConnectionUI('Demo stream', false);
+    if (!state.server?.connected) setConnectionUI(state.mode === 'demo' ? 'Demo stream' : 'Not connected', false);
   } finally {
     button.disabled = false;
     button.querySelector('span').textContent = 'Choose Bluetooth device';
@@ -443,6 +479,7 @@ async function discoverSupportedPids() {
     } catch { break; }
   }
   if (supported.size) SENSOR_DEFS.forEach((sensor) => { sensor.available = supported.has(sensor.pid); });
+  if (!state.selected.length) state.selected = ['rpm', 'speed', 'coolant'].filter((id) => sensorById(id)?.available);
   renderSensorRows();
   renderSignalOptions();
 }
@@ -484,12 +521,18 @@ function handleDisconnect() {
     state.pendingCommand = null;
   }
   state.server = null; state.writeCharacteristic = null; state.notifyCharacteristic = null;
-  state.mode = 'demo';
+  state.mode = 'idle';
+  state.values = { ...emptyValues };
+  state.history = {};
+  state.codes = [];
+  state.tripMiles = 0;
+  state.speedSamples = [];
+  SENSOR_DEFS.forEach((sensor) => { sensor.available = null; });
   $('#adapterName').textContent = 'Not connected';
-  setConnectionUI('Demo stream', false);
+  setConnectionUI('Not connected', false);
   clearInterval(demoTimer);
-  demoTimer = setInterval(tickDemo, 750);
-  showToast('Adapter disconnected. Demo stream resumed.');
+  renderSensorRows(); renderSignalOptions(); renderCodes(); updateLiveValues(); drawChart();
+  showToast('Adapter disconnected.');
 }
 
 function disconnectDevice() {
@@ -517,7 +560,7 @@ async function scanCodes() {
   const button = $('#scanCodes');
   if (state.mode !== 'vehicle') {
     renderCodes();
-    showToast('Connect a vehicle to replace the demo codes with an ECU scan.');
+    showToast(state.mode === 'demo' ? 'Connect a vehicle to replace the optional demo codes.' : 'Connect an OBD adapter before scanning.');
     return;
   }
   button.disabled = true;
@@ -535,6 +578,7 @@ async function scanCodes() {
 }
 
 async function clearCodes() {
+  if (state.mode === 'idle') { showToast('Connect an OBD adapter before clearing codes.'); return; }
   if (!confirm('Clear trouble codes and reset readiness monitors? Only continue after the underlying fault has been repaired.')) return;
   if (state.mode === 'vehicle') {
     state.suspendPolling = true;
@@ -551,13 +595,17 @@ function setDemoMode() {
   if (state.device?.gatt?.connected) state.device.gatt.disconnect();
   state.mode = 'demo';
   state.values = { ...initialValues };
-  SENSOR_DEFS.forEach((sensor, index) => { sensor.available = index < 19 || sensor.id === 'oil'; });
+  state.codes = demoCodes.map((code) => ({ ...code }));
+  state.selected = ['rpm', 'speed', 'coolant'];
+  state.tripMiles = 18.6;
+  state.speedSamples = [48];
+  SENSOR_DEFS.forEach((sensor) => { sensor.available = demoSupport[sensor.id]; });
   $('#adapterName').textContent = 'Not connected';
   setConnectionUI('Demo stream', false);
   $('#connectDialog').close();
   clearInterval(demoTimer);
   demoTimer = setInterval(tickDemo, 750);
-  renderSensorRows(); renderSignalOptions(); updateLiveValues();
+  renderSensorRows(); renderSignalOptions(); renderCodes(); updateLiveValues();
   showToast('Demo telemetry is active.');
 }
 
@@ -597,6 +645,7 @@ function registerWebMcpTools() {
 $$('.nav-item').forEach((item) => item.addEventListener('click', () => navigate(item.dataset.view)));
 $('#mobileMenu').addEventListener('click', () => $('.sidebar').classList.toggle('open'));
 $('#connectButton').addEventListener('click', disconnectDevice);
+$('#dashboardConnect').addEventListener('click', disconnectDevice);
 $('#pairDevice').addEventListener('click', connectBluetooth);
 $('#useDemo').addEventListener('click', setDemoMode);
 $('#sensorSearch').addEventListener('input', (event) => { state.sensorSearch = event.target.value; renderSensorRows(); });
@@ -622,8 +671,7 @@ renderSensorRows();
 renderSignalOptions();
 renderCodes();
 updateLiveValues();
-for (let i = 0; i < 70; i += 1) tickDemo();
-demoTimer = setInterval(tickDemo, 750);
+setConnectionUI('Not connected', false);
 setInterval(() => { $('#clock').textContent = new Date().toLocaleTimeString([], { hour12: false }); }, 1000);
 navigate(['dashboard', 'sensors', 'visualize', 'diagnose'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'dashboard', false);
 registerWebMcpTools();

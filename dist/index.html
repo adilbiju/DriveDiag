@@ -59,31 +59,36 @@
             <h1>Dashboard</h1>
           </div>
           <div class="topbar-meta">
-            <span class="connection-state"><i></i><span id="connectionLabel">Demo stream</span></span>
+            <span class="connection-state"><i></i><span id="connectionLabel">Not connected</span></span>
             <span class="clock" id="clock">--:--:--</span>
           </div>
         </header>
 
         <section class="view is-visible" id="dashboard" aria-labelledby="dashboard-title">
           <h2 class="sr-only" id="dashboard-title">Live dashboard</h2>
+          <div class="connect-prompt panel" id="connectPrompt">
+            <div class="prompt-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8 4v4M16 4v4M7 8h10v8H7zM9 16v4M15 16v4"/></svg></div>
+            <div><span>VEHICLE NOT CONNECTED</span><strong>Connect your OBD-II adapter to begin</strong><p>Turn the ignition on, then select a compatible Bluetooth Low Energy adapter.</p></div>
+            <button class="prompt-connect" id="dashboardConnect"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18l6-5-12-8 6-5zM6 16l12-8"/></svg>Connect OBD</button>
+          </div>
           <div class="dashboard-grid">
             <article class="hero-gauge panel">
               <div class="panel-heading">
                 <div><span class="kicker">Vehicle speed</span><strong>ROAD SPEED</strong></div>
-                <span class="live-tag">LIVE</span>
+                <span class="live-tag offline">OFFLINE</span>
               </div>
               <div class="speed-stage">
-                <div class="speed-gauge" aria-label="Current speed 72 miles per hour">
+                <div class="speed-gauge" aria-label="Speed unavailable until an adapter connects">
                   <svg viewBox="0 0 300 188" role="img">
                     <path class="gauge-track" d="M42 156A112 112 0 0 1 258 156" />
                     <path class="gauge-value" id="speedArc" d="M42 156A112 112 0 0 1 258 156" />
                     <g class="gauge-ticks" id="speedTicks"></g>
                   </svg>
-                  <div class="speed-readout"><strong id="speedValue">72</strong><span>MPH</span></div>
+                  <div class="speed-readout"><strong id="speedValue">—</strong><span>MPH</span></div>
                 </div>
                 <div class="drive-stats">
-                  <div><span>Trip</span><strong id="tripValue">18.6 mi</strong></div>
-                  <div><span>Avg. speed</span><strong id="avgValue">48 mph</strong></div>
+                  <div><span>Trip</span><strong id="tripValue">—</strong></div>
+                  <div><span>Avg. speed</span><strong id="avgValue">—</strong></div>
                 </div>
               </div>
             </article>
@@ -93,23 +98,23 @@
                 <div><span class="kicker">Engine load</span><strong>ENGINE SPEED</strong></div>
                 <svg class="engine-icon" viewBox="0 0 28 28" aria-hidden="true"><path d="M7 8h13l4 4v9H6l-3-4v-6h4zM10 5h7M11 13h4v4h-4z"/></svg>
               </div>
-              <div class="rpm-number"><strong id="rpmValue">2,840</strong><span>RPM</span></div>
+              <div class="rpm-number"><strong id="rpmValue">—</strong><span>RPM</span></div>
               <div class="rpm-bar"><i id="rpmBar"></i><b></b></div>
               <div class="rpm-scale"><span>0</span><span>2</span><span>4</span><span>6</span><span>8 × 1000</span></div>
-              <div class="load-line"><span>Calculated load</span><strong id="loadValue">42%</strong></div>
+              <div class="load-line"><span>Calculated load</span><strong id="loadValue">—</strong></div>
             </article>
 
             <article class="metric-card panel temperature">
               <div class="metric-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14.7V5a2 2 0 0 1 4 0v9.7a4 4 0 1 1-4 0zM12 8v8"/></svg></div>
-              <span>COOLANT TEMP</span><strong><b id="tempValue">196</b>°F</strong><div class="mini-bar"><i style="width:61%"></i></div><small>Normal range</small>
+              <span>COOLANT TEMP</span><strong><b id="tempValue">—</b><em hidden>°F</em></strong><div class="mini-bar"><i></i></div><small>Awaiting data</small>
             </article>
             <article class="metric-card panel fuel">
               <div class="metric-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4h10v17M4 21h13M8 8h4M15 8h2l2 3v7a2 2 0 0 0 2 2V9l-2-2"/></svg></div>
-              <span>FUEL LEVEL</span><strong><b id="fuelValue">68</b>%</strong><div class="mini-bar"><i style="width:68%"></i></div><small>Est. 284 mi remaining</small>
+              <span>FUEL LEVEL</span><strong><b id="fuelValue">—</b><em hidden>%</em></strong><div class="mini-bar"><i></i></div><small>Awaiting data</small>
             </article>
             <article class="metric-card panel voltage">
               <div class="metric-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7h14v12H5zM9 4h6v3M8 12h4M10 10v4M15 12h2"/></svg></div>
-              <span>CONTROL MODULE</span><strong><b id="voltageValue">14.2</b>V</strong><div class="mini-bar"><i style="width:72%"></i></div><small>Charging normally</small>
+              <span>CONTROL MODULE</span><strong><b id="voltageValue">—</b><em hidden>V</em></strong><div class="mini-bar"><i></i></div><small>Awaiting data</small>
             </article>
           </div>
         </section>
@@ -117,7 +122,7 @@
         <section class="view" id="sensors" aria-labelledby="sensors-heading">
           <div class="section-intro">
             <div><p class="kicker">MODE 01 · LIVE DATA</p><h2 id="sensors-heading">Sensor inventory</h2><p>Every standard PID this workspace can decode. Availability is confirmed when a vehicle connects.</p></div>
-            <div class="summary-chips"><span><b id="availableCount">18</b> available</span><span><b id="sensorRate">24</b> samples/sec</span></div>
+            <div class="summary-chips"><span><b id="availableCount">0</b> available</span><span><b id="sensorRate">0</b> samples/sec</span></div>
           </div>
           <div class="sensor-toolbar panel">
             <label class="search-box"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M16 16l5 5"/></svg><input id="sensorSearch" type="search" placeholder="Search sensors or PIDs" autocomplete="off" /></label>
@@ -136,14 +141,14 @@
           </div>
           <div class="visual-grid">
             <aside class="signal-picker panel">
-              <div class="picker-head"><strong>Signals</strong><span><b id="selectedCount">3</b>/4</span></div>
+              <div class="picker-head"><strong>Signals</strong><span><b id="selectedCount">0</b>/4</span></div>
               <label class="search-box compact"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M16 16l5 5"/></svg><input id="chartSearch" type="search" placeholder="Find a signal" autocomplete="off" /></label>
               <div id="signalOptions" class="signal-options"></div>
             </aside>
             <div class="chart-panel panel">
               <div class="chart-head">
                 <div><span>60 SECOND WINDOW</span><strong>LIVE COMPARISON</strong></div>
-                <span class="stream-state"><i></i><b id="streamText">STREAMING</b></span>
+                <span class="stream-state paused"><i></i><b id="streamText">WAITING FOR VEHICLE</b></span>
               </div>
               <div class="chart-wrap"><canvas id="liveChart" aria-label="Live chart of selected vehicle sensors"></canvas><div class="chart-y-labels"><span>100%</span><span>75%</span><span>50%</span><span>25%</span><span>0%</span></div></div>
               <div class="chart-legend" id="chartLegend"></div>
@@ -154,18 +159,18 @@
         <section class="view" id="diagnose" aria-labelledby="diagnose-heading">
           <div class="section-intro">
             <div><p class="kicker">MODE 03 · TROUBLE CODES</p><h2 id="diagnose-heading">Diagnose</h2><p>Read stored and pending DTCs from the engine control module.</p></div>
-            <button class="dark-btn" id="scanCodes"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4v6h6M5 10a8 8 0 1 1-1 5"/></svg>Scan again</button>
+            <button class="dark-btn" id="scanCodes"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4v6h6M5 10a8 8 0 1 1-1 5"/></svg>Scan codes</button>
           </div>
           <div class="health-banner panel">
             <div class="health-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 14h2l2-5 4 10 3-7 2 2h3"/></svg></div>
-            <div><span>POWERTRAIN HEALTH</span><strong id="healthTitle">2 issues need attention</strong><p id="healthCopy">Demo codes are shown until a vehicle is connected and scanned.</p></div>
-            <div class="issue-count"><strong id="issueCount">02</strong><span>CODES FOUND</span></div>
+            <div><span>POWERTRAIN HEALTH</span><strong id="healthTitle">Not connected</strong><p id="healthCopy">Connect an OBD adapter to scan the engine control module.</p></div>
+            <div class="issue-count"><strong id="issueCount">00</strong><span>CODES FOUND</span></div>
           </div>
           <div class="diagnostic-layout">
             <div class="codes-list" id="codesList"></div>
             <aside class="diagnostic-side panel">
               <div class="side-block"><span>MONITOR STATUS</span><div class="monitor-row"><strong>Misfire</strong><em class="ready">Ready</em></div><div class="monitor-row"><strong>Fuel system</strong><em class="ready">Ready</em></div><div class="monitor-row"><strong>Catalyst</strong><em>Incomplete</em></div><div class="monitor-row"><strong>O₂ sensor</strong><em class="ready">Ready</em></div></div>
-              <div class="side-block"><span>VEHICLE INFO</span><div class="info-row"><small>Protocol</small><strong id="protocolValue">ISO 15765-4 CAN</strong></div><div class="info-row"><small>MIL status</small><strong id="milStatus">On</strong></div><div class="info-row"><small>Distance with MIL</small><strong id="milDistance">126 mi</strong></div></div>
+              <div class="side-block"><span>VEHICLE INFO</span><div class="info-row"><small>Protocol</small><strong id="protocolValue">Awaiting connection</strong></div><div class="info-row"><small>MIL status</small><strong id="milStatus">—</strong></div><div class="info-row"><small>Distance with MIL</small><strong id="milDistance">—</strong></div></div>
               <button class="danger-btn" id="clearCodes"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5"/></svg>Clear trouble codes</button>
               <p class="clear-note">Clearing codes also resets readiness monitors. Repair the underlying fault first.</p>
             </aside>

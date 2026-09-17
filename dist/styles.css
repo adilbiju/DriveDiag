@@ -51,7 +51,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .eyebrow { margin: 0; color: var(--amber-dark); font-size: .68rem; font-weight: 700; letter-spacing: .22em; }
 .topbar-meta { margin-left: auto; display: flex; align-items: center; gap: 24px; color: var(--muted); font-size: .8rem; }
 .connection-state { display: flex; align-items: center; gap: 8px; }
-.connection-state i { width: 7px; height: 7px; background: var(--green); border-radius: 50%; box-shadow: 0 0 0 4px rgba(167,219,79,.14); }
+.connection-state i { width: 7px; height: 7px; background: #a5a89e; border-radius: 50%; }
 .clock { font-variant-numeric: tabular-nums; font-weight: 600; letter-spacing: .06em; }
 .mobile-menu { display: none; background: transparent; border: 0; padding: 8px; }
 .mobile-menu svg { width: 24px; }
@@ -59,6 +59,16 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .view { display: none; animation: rise .25s ease both; }
 .view.is-visible { display: block; }
 @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+.connect-prompt { min-height: 88px; margin-bottom: 18px; padding: 17px 20px; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 15px; border-left: 4px solid var(--amber); box-shadow: none; }
+.connect-prompt[hidden] { display: none; }
+.prompt-icon { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 7px; background: #fff1d9; color: var(--amber-dark); }
+.prompt-icon svg { width: 22px; }
+.connect-prompt span { display: block; color: var(--amber-dark); font-size: .62rem; font-weight: 800; letter-spacing: .13em; }
+.connect-prompt strong { display: block; margin-top: 2px; font-family: "Barlow Condensed", sans-serif; font-size: 1.22rem; letter-spacing: .03em; text-transform: uppercase; }
+.connect-prompt p { margin: 2px 0 0; color: var(--muted); font-size: .72rem; }
+.prompt-connect { min-height: 43px; padding: 0 17px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border: 0; border-radius: 6px; background: var(--amber); cursor: pointer; font-size: .78rem; font-weight: 800; }
+.prompt-connect:hover { background: #ffbb58; }
+.prompt-connect svg { width: 18px; }
 .dashboard-grid { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(280px, .95fr); gap: 18px; }
 .panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
 .hero-gauge, .rpm-panel { min-height: 390px; padding: 26px 28px; }
@@ -66,6 +76,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .panel-heading .kicker { display: block; color: var(--muted); font-size: .66rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; margin-bottom: 4px; }
 .panel-heading strong { font-family: "Barlow Condensed", sans-serif; font-size: 1.1rem; letter-spacing: .06em; }
 .live-tag { background: #eef6de; color: #5d7d26; border-radius: 4px; padding: 4px 7px; font-size: .62rem; font-weight: 800; letter-spacing: .12em; }
+.live-tag.offline { background: #efefeb; color: #7a7d75; }
 .speed-stage { display: grid; place-items: center; }
 .speed-gauge { width: min(100%, 430px); position: relative; aspect-ratio: 300/188; }
 .speed-gauge svg { width: 100%; height: 100%; overflow: visible; }
@@ -96,6 +107,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .metric-card > span { display: block; color: var(--muted); letter-spacing: .12em; font-size: .64rem; font-weight: 700; }
 .metric-card > strong { display: block; font-family: "Barlow Condensed", sans-serif; font-size: 2.7rem; margin: 10px 0 7px; font-weight: 600; }
 .metric-card > strong b { font-weight: inherit; font-variant-numeric: tabular-nums; }
+.metric-card > strong em { font: inherit; font-style: normal; }
 .mini-bar { height: 4px; background: #e9e8e1; border-radius: 4px; overflow: hidden; }
 .mini-bar i { height: 100%; display: block; background: var(--amber); }
 .metric-card small { display: block; color: var(--muted); font-size: .65rem; margin-top: 8px; }
@@ -131,12 +143,14 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .status-pill { width: fit-content; display: inline-flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 99px; font-size: .66rem; font-weight: 700; background: #edf5df; color: #58751f; }
 .status-pill::before { content: ""; width: 6px; height: 6px; background: #87b536; border-radius: 50%; }
 .status-pill.off { background: #efefeb; color: #868980; }.status-pill.off::before { background: #aaa; }
+.status-pill.unknown { background: #f4f1e9; color: #817968; }.status-pill.unknown::before { background: #b4ab97; }
 .empty-row { min-height: 180px; display: grid; place-items: center; color: var(--muted); font-size: .85rem; }
 
 .chart-actions { display: flex; gap: 9px; }
 .quiet-btn, .dark-btn, .danger-btn { min-height: 41px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; border-radius: 6px; padding: 0 15px; cursor: pointer; font-size: .76rem; font-weight: 800; }
 .quiet-btn { border: 1px solid var(--line); background: #fff; }
 .dark-btn { border: 1px solid var(--ink); background: var(--ink); color: #fff; }
+.quiet-btn:disabled, .dark-btn:disabled { opacity: .42; cursor: not-allowed; }
 .quiet-btn svg, .dark-btn svg, .danger-btn svg { width: 17px; }
 .dark-btn:hover { background: #30332e; }
 .visual-grid { display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 16px; min-height: 520px; }
@@ -213,6 +227,7 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
   .main-area { padding: 0 18px 32px; }.topbar { height: 92px; margin-bottom: 22px; }.mobile-menu { display: block; }
   .topbar-meta .clock { display: none; }.topbar-meta { gap: 10px; }.connection-state span { display: none; }
   .dashboard-grid { grid-template-columns: 1fr; }.hero-gauge, .rpm-panel, .metric-card { grid-column: auto; }
+  .connect-prompt { grid-template-columns: auto 1fr; }.prompt-connect { grid-column: 1 / -1; width: 100%; }
   .hero-gauge, .rpm-panel { min-height: auto; padding: 22px 18px; }.rpm-number { margin: 44px 0 32px; }.load-line { margin-top: 35px; }
   .drive-stats div { padding-inline: 10px; }.placeholder-panel { padding: 35px 18px; }
   .section-intro { align-items: flex-start; flex-direction: column; gap: 16px; }.summary-chips { justify-content: start; }
