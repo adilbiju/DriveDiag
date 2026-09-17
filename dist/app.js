@@ -341,17 +341,25 @@ function setConnectionUI(label, connected) {
   $('#resetChart').disabled = state.mode === 'idle';
 }
 
-async function connectBluetooth() {
+async function connectBluetooth(showAll = false) {
   if (!navigator.bluetooth) {
     showToast('Web Bluetooth is not available in this browser. Try Chrome or Edge over HTTPS.');
     return;
   }
-  const button = $('#pairDevice');
-  button.disabled = true;
-  button.querySelector('span').textContent = 'Waiting for device…';
+  const filteredButton = $('#pairDevice');
+  const allButton = $('#showAllDevices');
+  filteredButton.disabled = true;
+  allButton.disabled = true;
+  if (showAll) allButton.textContent = 'Waiting for device…';
+  else filteredButton.querySelector('span').textContent = 'Searching for OBD devices…';
   try {
     const services = [...new Set(Object.values(UUIDS).map((config) => config.service))];
-    const device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: services });
+    const namePrefixes = ['OBD', 'obd', 'ELM', 'Vgate', 'V-GATE', 'V-LINK', 'vLinker', 'OBDLink', 'VEEPEAK', 'Viecar', 'iCar', 'KONNWEI', 'CARISTA', 'FIXD', 'BAFX'];
+    const filters = namePrefixes.map((namePrefix) => ({ namePrefix }));
+    const requestOptions = showAll
+      ? { acceptAllDevices: true, optionalServices: services }
+      : { filters, optionalServices: services };
+    const device = await navigator.bluetooth.requestDevice(requestOptions);
     state.device = device;
     device.addEventListener('gattserverdisconnected', handleDisconnect);
     setConnectionUI('Connecting…', false);
@@ -391,8 +399,10 @@ async function connectBluetooth() {
     if (error.name !== 'NotFoundError') showToast(error.message || 'Could not connect to that adapter.');
     if (!state.server?.connected) setConnectionUI(state.mode === 'demo' ? 'Demo stream' : 'Not connected', false);
   } finally {
-    button.disabled = false;
-    button.querySelector('span').textContent = 'Choose Bluetooth device';
+    filteredButton.disabled = false;
+    allButton.disabled = false;
+    filteredButton.querySelector('span').textContent = 'Find OBD devices';
+    allButton.textContent = 'Adapter not listed? Show all devices';
   }
 }
 
@@ -646,7 +656,8 @@ $$('.nav-item').forEach((item) => item.addEventListener('click', () => navigate(
 $('#mobileMenu').addEventListener('click', () => $('.sidebar').classList.toggle('open'));
 $('#connectButton').addEventListener('click', disconnectDevice);
 $('#dashboardConnect').addEventListener('click', disconnectDevice);
-$('#pairDevice').addEventListener('click', connectBluetooth);
+$('#pairDevice').addEventListener('click', () => connectBluetooth(false));
+$('#showAllDevices').addEventListener('click', () => connectBluetooth(true));
 $('#useDemo').addEventListener('click', setDemoMode);
 $('#sensorSearch').addEventListener('input', (event) => { state.sensorSearch = event.target.value; renderSensorRows(); });
 $$('.segmented button').forEach((button) => button.addEventListener('click', () => {
