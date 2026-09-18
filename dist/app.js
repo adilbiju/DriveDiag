@@ -22,7 +22,7 @@ const SENSOR_DEFS = [
   { id: 'fuel', pid: '2F', name: 'Fuel tank level', short: 'Fuel level', unit: '%', min: 0, max: 100, range: '0–100%', group: 'Fuel', available: true, decode: ([a]) => a * 100 / 255 },
   { id: 'barometric', pid: '33', name: 'Barometric pressure', short: 'Barometric pressure', unit: 'kPa', min: 0, max: 130, range: '0–255 kPa', group: 'Air', available: true, decode: ([a]) => a },
   { id: 'catalyst', pid: '3C', name: 'Catalyst temperature — Bank 1', short: 'Catalyst temp', unit: '°F', min: 0, max: 1800, range: '-40–1,691°F', group: 'Emissions', available: true, decode: ([a, b]) => ((a * 256 + b) / 10 - 40) * 9 / 5 + 32 },
-  { id: 'voltage', pid: '42', name: 'Control module voltage', short: 'Module voltage', unit: 'V', min: 8, max: 16, range: '0–65.5 V', group: 'Electrical', available: true, decode: ([a, b]) => (a * 256 + b) / 1000 },
+  { id: 'voltage', command: 'ATRV', name: 'OBD adapter supply voltage', short: 'Battery voltage', unit: 'V', min: 8, max: 16, range: '0–25 V', group: 'Electrical', available: true, decodeResponse: (response) => Number.parseFloat(response.match(/(\d+(?:\.\d+)?)\s*V/i)?.[1]) },
   { id: 'absoluteLoad', pid: '43', name: 'Absolute load value', short: 'Absolute load', unit: '%', min: 0, max: 150, range: '0–25,700%', group: 'Engine', available: false, decode: ([a, b]) => (a * 256 + b) * 100 / 255 },
   { id: 'relativeThrottle', pid: '45', name: 'Relative throttle position', short: 'Relative throttle', unit: '%', min: 0, max: 100, range: '0–100%', group: 'Air', available: false, decode: ([a]) => a * 100 / 255 },
   { id: 'ambient', pid: '46', name: 'Ambient air temperature', short: 'Ambient temp', unit: '°F', min: -40, max: 160, range: '-40–419°F', group: 'Thermal', available: true, decode: ([a]) => (a - 40) * 9 / 5 + 32 },
@@ -126,7 +126,7 @@ function updateDashboard() {
   $('.voltage .mini-bar i').style.width = `${Number.isFinite(voltage) ? clamp((voltage - 8) * 12.5, 0, 100) : 0}%`;
   $('.temperature small').textContent = Number.isFinite(coolant) ? 'Live coolant reading' : 'Awaiting data';
   $('.fuel small').textContent = Number.isFinite(fuel) ? 'Live tank level' : 'Awaiting data';
-  $('.voltage small').textContent = Number.isFinite(voltage) ? 'Live module voltage' : 'Awaiting data';
+  $('.voltage small').textContent = Number.isFinite(voltage) ? 'Live OBD-port voltage' : 'Awaiting data';
   $('#speedValue').closest('.speed-gauge').setAttribute('aria-label', hasSpeed ? `Current speed ${Math.round(speed)} miles per hour` : 'Speed unavailable until an adapter connects');
 }
 
@@ -150,7 +150,7 @@ function renderSensorRows() {
   $('#sensorRows').innerHTML = visible.length ? visible.map((sensor) => `
     <div class="sensor-row">
       <div class="sensor-name"><span class="sensor-glyph">${sensor.group.slice(0, 2).toUpperCase()}</span><div><strong>${sensor.name}</strong><small>${sensor.group}</small></div></div>
-      <span class="pid-code">01 ${sensor.pid}</span>
+      <span class="pid-code">${sensor.command ? 'AT RV' : `01 ${sensor.pid}`}</span>
       <strong class="live-value" data-sensor-value="${sensor.id}">${formatValue(sensor, state.values[sensor.id])}</strong>
       <span class="sensor-range">${sensor.range}</span>
       <span class="status-pill ${sensor.available === null ? 'unknown' : sensor.available ? '' : 'off'}">${sensor.available === null ? 'Awaiting scan' : sensor.available ? 'Available' : 'Not reported'}</span>
@@ -404,6 +404,7 @@ async function connectBluetooth(showAll = false) {
     connectionStage = 'reading the vehicle sensor list';
     setConnectionUI('Detecting vehicle protocol…', true);
     const supportedCount = await discoverSupportedPids(25000);
+    await refreshAdapterVoltage();
     startVehiclePolling();
     if (supportedCount) {
       setConnectionUI(device.name || 'Vehicle connected', true);
@@ -503,6 +504,24 @@ function extractMode01(response, pid) {
   return null;
 }
 
+async function refreshAdapterVoltage() {
+  const sensor = sensorById('voltage');
+  try {
+    const response = await sendCommand(sensor.command, 2500);
+    const value = sensor.decodeResponse(response);
+    if (!Number.isFinite(value)) throw new Error('Invalid ATRV response.');
+    state.values.voltage = value;
+    sensor.available = true;
+    updateLiveValues();
+    renderSensorRows();
+    renderSignalOptions();
+    return true;
+  } catch {
+    sensor.available = false;
+    return false;
+  }
+}
+
 async function discoverSupportedPids(initialTimeout = 25000) {
   const supported = new Set();
   for (const basePid of ['00', '20', '40', '60', '80', 'A0']) {
@@ -517,7 +536,9 @@ async function discoverSupportedPids(initialTimeout = 25000) {
       if (!supported.has((base + 0x20).toString(16).toUpperCase().padStart(2, '0'))) break;
     } catch { break; }
   }
-  if (supported.size) SENSOR_DEFS.forEach((sensor) => { sensor.available = supported.has(sensor.pid); });
+  if (supported.size) SENSOR_DEFS.forEach((sensor) => {
+    if (!sensor.command) sensor.available = supported.has(sensor.pid);
+  });
   if (!state.selected.length) state.selected = ['rpm', 'speed', 'coolant'].filter((id) => sensorById(id)?.available);
   renderSensorRows();
   renderSignalOptions();
@@ -530,7 +551,9 @@ function startVehiclePolling() {
     if (state.mode !== 'vehicle' || !state.server?.connected) return;
     if (state.suspendPolling) { state.pollTimer = setTimeout(poll, 120); return; }
     const available = SENSOR_DEFS.filter((sensor) => sensor.available);
-    if (!available.length) {
+    const vehicleSensors = available.filter((sensor) => !sensor.command);
+    if (!vehicleSensors.length) {
+      await refreshAdapterVoltage();
       const supportedCount = await discoverSupportedPids(6000);
       if (supportedCount) {
         setConnectionUI(state.device?.name || 'Vehicle connected', true);
@@ -542,10 +565,10 @@ function startVehiclePolling() {
     const sensor = available[state.pollingIndex % available.length];
     state.pollingIndex += 1;
     try {
-      const response = await sendCommand(`01${sensor.pid}`);
-      const payload = extractMode01(response, sensor.pid);
-      if (payload) {
-        const value = sensor.decode(payload);
+      const response = await sendCommand(sensor.command || `01${sensor.pid}`);
+      const payload = sensor.command ? null : extractMode01(response, sensor.pid);
+      if (sensor.command || payload) {
+        const value = sensor.command ? sensor.decodeResponse(response) : sensor.decode(payload);
         if (Number.isFinite(value)) {
           state.values[sensor.id] = value;
           if (sensor.id === 'speed') {
