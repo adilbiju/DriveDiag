@@ -402,9 +402,16 @@ async function connectBluetooth(showAll = false) {
     connectionStage = 'initializing the OBD adapter';
     await initializeAdapter();
     connectionStage = 'reading the vehicle sensor list';
-    await discoverSupportedPids();
+    setConnectionUI('Detecting vehicle protocol…', true);
+    const supportedCount = await discoverSupportedPids(25000);
     startVehiclePolling();
-    showToast(`${device.name || 'OBD adapter'} connected.`);
+    if (supportedCount) {
+      setConnectionUI(device.name || 'Vehicle connected', true);
+      showToast(`${device.name || 'OBD adapter'} connected.`);
+    } else {
+      setConnectionUI(`${device.name || 'Adapter'} · waiting for vehicle`, true);
+      showToast('Adapter connected, but the vehicle has not responded. Keep the ignition on; detection will retry.');
+    }
   } catch (error) {
     if (state.device) state.device.removeEventListener('gattserverdisconnected', handleDisconnect);
     if (state.device?.gatt?.connected) state.device.gatt.disconnect();
@@ -457,6 +464,7 @@ async function sendCommand(command, timeout = 2200) {
   return new Promise(async (resolve, reject) => {
     const timer = setTimeout(() => {
       if (state.pendingCommand?.command === command) state.pendingCommand = null;
+      console.warn(`[OBD] ${command} timed out after ${timeout} ms`);
       reject(new Error(`No response to ${command}`));
     }, timeout);
     state.pendingCommand = { command, resolve, reject, timer };
@@ -495,11 +503,11 @@ function extractMode01(response, pid) {
   return null;
 }
 
-async function discoverSupportedPids() {
+async function discoverSupportedPids(initialTimeout = 25000) {
   const supported = new Set();
   for (const basePid of ['00', '20', '40', '60', '80', 'A0']) {
     try {
-      const response = await sendCommand(`01${basePid}`);
+      const response = await sendCommand(`01${basePid}`, basePid === '00' ? initialTimeout : 5000);
       const data = extractMode01(response, basePid);
       if (!data || data.length < 4) break;
       const base = parseInt(basePid, 16);
@@ -513,6 +521,7 @@ async function discoverSupportedPids() {
   if (!state.selected.length) state.selected = ['rpm', 'speed', 'coolant'].filter((id) => sensorById(id)?.available);
   renderSensorRows();
   renderSignalOptions();
+  return supported.size;
 }
 
 function startVehiclePolling() {
@@ -521,6 +530,15 @@ function startVehiclePolling() {
     if (state.mode !== 'vehicle' || !state.server?.connected) return;
     if (state.suspendPolling) { state.pollTimer = setTimeout(poll, 120); return; }
     const available = SENSOR_DEFS.filter((sensor) => sensor.available);
+    if (!available.length) {
+      const supportedCount = await discoverSupportedPids(6000);
+      if (supportedCount) {
+        setConnectionUI(state.device?.name || 'Vehicle connected', true);
+        showToast('Vehicle data detected.');
+      }
+      state.pollTimer = setTimeout(poll, supportedCount ? 90 : 5000);
+      return;
+    }
     const sensor = available[state.pollingIndex % available.length];
     state.pollingIndex += 1;
     try {
