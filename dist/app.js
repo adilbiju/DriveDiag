@@ -321,9 +321,9 @@ function tickDemo() {
 }
 
 const UUIDS = {
-  obdlink: { service: '0000fff0-0000-1000-8000-00805f9b34fb', write: '0000fff1-0000-1000-8000-00805f9b34fb', notify: '0000fff1-0000-1000-8000-00805f9b34fb' },
-  nordic: { service: '6e400001-b5a3-f393-e0a9-e50e24dcca9e', write: '6e400002-b5a3-f393-e0a9-e50e24dcca9e', notify: '6e400003-b5a3-f393-e0a9-e50e24dcca9e' },
-  hm10: { service: '0000ffe0-0000-1000-8000-00805f9b34fb', write: '0000ffe1-0000-1000-8000-00805f9b34fb', notify: '0000ffe1-0000-1000-8000-00805f9b34fb' }
+  obdlink: { label: 'OBDLink CX', service: '0000fff0-0000-1000-8000-00805f9b34fb', write: '0000fff2-0000-1000-8000-00805f9b34fb', notify: '0000fff1-0000-1000-8000-00805f9b34fb' },
+  nordic: { label: 'Nordic UART', service: '6e400001-b5a3-f393-e0a9-e50e24dcca9e', write: '6e400002-b5a3-f393-e0a9-e50e24dcca9e', notify: '6e400003-b5a3-f393-e0a9-e50e24dcca9e' },
+  hm10: { label: 'HM-10 UART', service: '0000ffe0-0000-1000-8000-00805f9b34fb', write: '0000ffe1-0000-1000-8000-00805f9b34fb', notify: '0000ffe1-0000-1000-8000-00805f9b34fb' }
 };
 
 function setConnectionUI(label, connected) {
@@ -352,6 +352,7 @@ async function connectBluetooth(showAll = false) {
   allButton.disabled = true;
   if (showAll) allButton.textContent = 'Waiting for device…';
   else filteredButton.querySelector('span').textContent = 'Searching for OBD devices…';
+  let connectionStage = 'opening the Bluetooth connection';
   try {
     const services = [...new Set(Object.values(UUIDS).map((config) => config.service))];
     const namePrefixes = ['OBD', 'obd', 'ELM', 'Vgate', 'V-GATE', 'V-LINK', 'vLinker', 'OBDLink', 'VEEPEAK', 'Viecar', 'iCar', 'KONNWEI', 'CARISTA', 'FIXD', 'BAFX'];
@@ -367,18 +368,25 @@ async function connectBluetooth(showAll = false) {
     let transport = null;
     for (const config of Object.values(UUIDS)) {
       try {
+        connectionStage = `opening the ${config.label} service`;
         const service = await state.server.getPrimaryService(config.service);
         const writeCharacteristic = await service.getCharacteristic(config.write);
         const notifyCharacteristic = config.notify === config.write ? writeCharacteristic : await service.getCharacteristic(config.notify);
-        transport = { writeCharacteristic, notifyCharacteristic };
+        const canWrite = writeCharacteristic.properties.write || writeCharacteristic.properties.writeWithoutResponse;
+        const canNotify = notifyCharacteristic.properties.notify || notifyCharacteristic.properties.indicate;
+        if (!canWrite) throw new Error(`${config.label} write characteristic is not writable.`);
+        if (!canNotify) throw new Error(`${config.label} notification characteristic cannot notify.`);
+        transport = { ...config, writeCharacteristic, notifyCharacteristic };
         break;
       } catch { /* Try the next known BLE UART profile. */ }
     }
     if (!transport) throw new Error('No supported serial service was found on this device.');
     state.writeCharacteristic = transport.writeCharacteristic;
     state.notifyCharacteristic = transport.notifyCharacteristic;
+    connectionStage = `subscribing to ${transport.label} notifications`;
     await state.notifyCharacteristic.startNotifications();
     state.notifyCharacteristic.addEventListener('characteristicvaluechanged', handleNotification);
+    await sleep(250);
     state.mode = 'vehicle';
     clearInterval(demoTimer);
     state.values = { ...emptyValues };
@@ -391,13 +399,22 @@ async function connectBluetooth(showAll = false) {
     setConnectionUI(device.name || 'Vehicle connected', true);
     renderSensorRows(); renderSignalOptions(); renderCodes(); updateLiveValues();
     $('#connectDialog').close();
+    connectionStage = 'initializing the OBD adapter';
     await initializeAdapter();
+    connectionStage = 'reading the vehicle sensor list';
     await discoverSupportedPids();
     startVehiclePolling();
     showToast(`${device.name || 'OBD adapter'} connected.`);
   } catch (error) {
-    if (error.name !== 'NotFoundError') showToast(error.message || 'Could not connect to that adapter.');
-    if (!state.server?.connected) setConnectionUI(state.mode === 'demo' ? 'Demo stream' : 'Not connected', false);
+    if (state.device) state.device.removeEventListener('gattserverdisconnected', handleDisconnect);
+    if (state.device?.gatt?.connected) state.device.gatt.disconnect();
+    resetDisconnectedState();
+    if (error.name !== 'NotFoundError') {
+      const message = /GATT operation not permitted/i.test(error.message || '')
+        ? `The adapter rejected ${connectionStage}. Close other OBD apps, unplug and reconnect the adapter, then try again.`
+        : error.message || 'Could not connect to that adapter.';
+      showToast(message);
+    }
   } finally {
     filteredButton.disabled = false;
     allButton.disabled = false;
@@ -424,8 +441,12 @@ async function writeCommand(command) {
   const characteristic = state.writeCharacteristic;
   if (characteristic.properties.writeWithoutResponse && characteristic.writeValueWithoutResponse) {
     await characteristic.writeValueWithoutResponse(bytes);
-  } else {
+  } else if (characteristic.properties.write && characteristic.writeValueWithResponse) {
+    await characteristic.writeValueWithResponse(bytes);
+  } else if (characteristic.properties.write) {
     await characteristic.writeValue(bytes);
+  } else {
+    throw new Error('The selected Bluetooth characteristic is not writable.');
   }
 }
 
@@ -523,7 +544,7 @@ function startVehiclePolling() {
   poll();
 }
 
-function handleDisconnect() {
+function resetDisconnectedState(showDisconnectedToast = false) {
   clearTimeout(state.pollTimer);
   if (state.pendingCommand) {
     clearTimeout(state.pendingCommand.timer);
@@ -531,6 +552,7 @@ function handleDisconnect() {
     state.pendingCommand = null;
   }
   state.server = null; state.writeCharacteristic = null; state.notifyCharacteristic = null;
+  state.device = null;
   state.mode = 'idle';
   state.values = { ...emptyValues };
   state.history = {};
@@ -542,7 +564,11 @@ function handleDisconnect() {
   setConnectionUI('Not connected', false);
   clearInterval(demoTimer);
   renderSensorRows(); renderSignalOptions(); renderCodes(); updateLiveValues(); drawChart();
-  showToast('Adapter disconnected.');
+  if (showDisconnectedToast) showToast('Adapter disconnected.');
+}
+
+function handleDisconnect() {
+  resetDisconnectedState(true);
 }
 
 function disconnectDevice() {
