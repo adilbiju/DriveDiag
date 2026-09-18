@@ -52,9 +52,15 @@ const demoCodes = [
 SENSOR_DEFS.forEach((sensor) => { sensor.available = null; });
 
 const SERIES_COLORS = ['#f39a17', '#242924', '#6b9e2a', '#dc5b43'];
+const FAST_SENSOR_IDS = ['rpm', 'speed', 'load', 'throttle'];
+const POLL_INTERVALS = {
+  rpm: 120, speed: 120, load: 250, throttle: 250, maf: 500, timing: 500,
+  shortFuel: 900, longFuel: 900, coolant: 2500, intake: 2500, voltage: 5000
+};
 const state = {
   mode: 'idle', device: null, server: null, writeCharacteristic: null, notifyCharacteristic: null,
   responseBuffer: '', pendingCommand: null, pollTimer: null, pollingIndex: 0, suspendPolling: false,
+  sensorLastPolled: {}, fastBundleIds: [], lastFastPoll: 0, fastTimingConfigured: false, sampleTimestamps: [],
   values: { ...emptyValues }, selected: [], history: {}, paused: false,
   sensorFilter: 'all', sensorSearch: '', chartSearch: '',
   tripMiles: 0, speedSamples: [], codes: []
@@ -71,6 +77,13 @@ function showToast(message) {
   toast.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => toast.classList.remove('show'), 3000);
+}
+
+function currentSampleRate(now = Date.now()) {
+  state.sampleTimestamps = state.sampleTimestamps.filter((timestamp) => now - timestamp <= 5000);
+  if (!state.sampleTimestamps.length) return 0;
+  const windowSeconds = Math.max(1, (now - state.sampleTimestamps[0]) / 1000);
+  return state.sampleTimestamps.length / windowSeconds;
 }
 
 function formatValue(sensor, value) {
@@ -146,7 +159,7 @@ function renderSensorRows() {
     return matchesText && matchesFilter;
   });
   $('#availableCount').textContent = SENSOR_DEFS.filter((sensor) => sensor.available === true).length;
-  $('#sensorRate').textContent = state.mode === 'idle' ? '0' : state.mode === 'demo' ? '24' : 'Live';
+  $('#sensorRate').textContent = state.mode === 'idle' ? '0' : state.mode === 'demo' ? '24' : currentSampleRate().toFixed(1);
   $('#sensorRows').innerHTML = visible.length ? visible.map((sensor) => `
     <div class="sensor-row">
       <div class="sensor-name"><span class="sensor-glyph">${sensor.group.slice(0, 2).toUpperCase()}</span><div><strong>${sensor.name}</strong><small>${sensor.group}</small></div></div>
@@ -394,6 +407,11 @@ async function connectBluetooth(showAll = false) {
     state.codes = [];
     state.tripMiles = 0;
     state.speedSamples = [];
+    state.sensorLastPolled = {};
+    state.fastBundleIds = [];
+    state.lastFastPoll = 0;
+    state.fastTimingConfigured = false;
+    state.sampleTimestamps = [];
     SENSOR_DEFS.forEach((sensor) => { sensor.available = null; });
     $('#adapterName').textContent = device.name || 'BLE OBD adapter';
     setConnectionUI(device.name || 'Vehicle connected', true);
@@ -404,7 +422,9 @@ async function connectBluetooth(showAll = false) {
     connectionStage = 'reading the vehicle sensor list';
     setConnectionUI('Detecting vehicle protocol…', true);
     const supportedCount = await discoverSupportedPids(25000);
+    if (supportedCount) await configureFastTiming();
     await refreshAdapterVoltage();
+    await detectFastBundleSupport();
     startVehiclePolling();
     if (supportedCount) {
       setConnectionUI(device.name || 'Vehicle connected', true);
@@ -522,6 +542,54 @@ async function refreshAdapterVoltage() {
   }
 }
 
+async function configureFastTiming() {
+  if (state.fastTimingConfigured) return;
+  for (const command of ['ATAT2', 'ATST0A']) {
+    try { await sendCommand(command, 1800); } catch { /* Older adapters may ignore timing controls. */ }
+  }
+  state.fastTimingConfigured = true;
+}
+
+function applySensorValue(sensor, value) {
+  if (!Number.isFinite(value)) return false;
+  state.values[sensor.id] = value;
+  state.sampleTimestamps.push(Date.now());
+  const rateElement = $('#sensorRate');
+  if (rateElement) rateElement.textContent = currentSampleRate().toFixed(1);
+  if (sensor.id === 'speed') {
+    state.speedSamples.push(value);
+    if (state.speedSamples.length > 120) state.speedSamples.shift();
+  }
+  return true;
+}
+
+function readSensorResponse(sensor, response) {
+  if (sensor.command) return sensor.decodeResponse(response);
+  const payload = extractMode01(response, sensor.pid);
+  return payload ? sensor.decode(payload) : Number.NaN;
+}
+
+async function detectFastBundleSupport() {
+  const sensors = FAST_SENSOR_IDS.map(sensorById)
+    .filter((sensor) => sensor?.available)
+    .sort((a, b) => parseInt(a.pid, 16) - parseInt(b.pid, 16));
+  if (sensors.length < 2) return false;
+  try {
+    const response = await sendCommand(`01${sensors.map((sensor) => sensor.pid).join('')}`, 3000);
+    const readings = sensors.map((sensor) => [sensor, readSensorResponse(sensor, response)]);
+    if (readings.some(([, value]) => !Number.isFinite(value))) return false;
+    readings.forEach(([sensor, value]) => applySensorValue(sensor, value));
+    state.fastBundleIds = sensors.map((sensor) => sensor.id);
+    state.lastFastPoll = Date.now();
+    console.info(`[OBD] Combined fast polling enabled for ${state.fastBundleIds.join(', ')}.`);
+    updateLiveValues();
+    pushHistory();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function discoverSupportedPids(initialTimeout = 25000) {
   const supported = new Set();
   for (const basePid of ['00', '20', '40', '60', '80', 'A0']) {
@@ -556,31 +624,45 @@ function startVehiclePolling() {
       await refreshAdapterVoltage();
       const supportedCount = await discoverSupportedPids(6000);
       if (supportedCount) {
+        await configureFastTiming();
+        await detectFastBundleSupport();
         setConnectionUI(state.device?.name || 'Vehicle connected', true);
         showToast('Vehicle data detected.');
       }
-      state.pollTimer = setTimeout(poll, supportedCount ? 90 : 5000);
+      state.pollTimer = setTimeout(poll, supportedCount ? 5 : 5000);
       return;
     }
-    const sensor = available[state.pollingIndex % available.length];
-    state.pollingIndex += 1;
+    const bundled = new Set(state.fastBundleIds.filter((id) => sensorById(id)?.available));
+    const now = Date.now();
+    const tasks = available
+      .filter((sensor) => !bundled.has(sensor.id))
+      .map((sensor) => ({ type: 'sensor', sensor, interval: POLL_INTERVALS[sensor.id] || 1500, last: state.sensorLastPolled[sensor.id] || 0 }));
+    if (bundled.size > 1) tasks.push({ type: 'bundle', interval: 120, last: state.lastFastPoll });
+    const task = tasks.reduce((best, candidate) => {
+      const score = (now - candidate.last) / candidate.interval;
+      const bestScore = best ? (now - best.last) / best.interval : -Infinity;
+      return score > bestScore ? candidate : best;
+    }, null);
+    if (!task) { state.pollTimer = setTimeout(poll, 250); return; }
     try {
-      const response = await sendCommand(sensor.command || `01${sensor.pid}`);
-      const payload = sensor.command ? null : extractMode01(response, sensor.pid);
-      if (sensor.command || payload) {
-        const value = sensor.command ? sensor.decodeResponse(response) : sensor.decode(payload);
-        if (Number.isFinite(value)) {
-          state.values[sensor.id] = value;
-          if (sensor.id === 'speed') {
-            state.speedSamples.push(value);
-            if (state.speedSamples.length > 120) state.speedSamples.shift();
-          }
-          updateLiveValues();
-          pushHistory();
-        }
+      let changed = false;
+      if (task.type === 'bundle') {
+        const sensors = [...bundled].map(sensorById);
+        state.lastFastPoll = now;
+        const response = await sendCommand(`01${sensors.map((sensor) => sensor.pid).join('')}`);
+        sensors.forEach((sensor) => { changed = applySensorValue(sensor, readSensorResponse(sensor, response)) || changed; });
+      } else {
+        const { sensor } = task;
+        state.sensorLastPolled[sensor.id] = now;
+        const response = await sendCommand(sensor.command || `01${sensor.pid}`);
+        changed = applySensorValue(sensor, readSensorResponse(sensor, response));
+      }
+      if (changed) {
+        updateLiveValues();
+        pushHistory();
       }
     } catch { /* Keep polling; inexpensive adapters occasionally skip a frame. */ }
-    state.pollTimer = setTimeout(poll, 90);
+    state.pollTimer = setTimeout(poll, 5);
   };
   poll();
 }
@@ -600,6 +682,11 @@ function resetDisconnectedState(showDisconnectedToast = false) {
   state.codes = [];
   state.tripMiles = 0;
   state.speedSamples = [];
+  state.sensorLastPolled = {};
+  state.fastBundleIds = [];
+  state.lastFastPoll = 0;
+  state.fastTimingConfigured = false;
+  state.sampleTimestamps = [];
   SENSOR_DEFS.forEach((sensor) => { sensor.available = null; });
   $('#adapterName').textContent = 'Not connected';
   setConnectionUI('Not connected', false);
