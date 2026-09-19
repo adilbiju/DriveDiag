@@ -52,6 +52,11 @@ const demoCodes = [
 SENSOR_DEFS.forEach((sensor) => { sensor.available = null; });
 
 const SERIES_COLORS = ['#f39a17', '#242924', '#6b9e2a', '#dc5b43'];
+const SENSOR_ICONS = {
+  Engine: 'engine', Thermal: 'temperature', Fuel: 'gas-station', Air: 'wind',
+  Motion: 'dashboard', Emissions: 'activity-heartbeat', Vehicle: 'car',
+  Diagnostics: 'alert-triangle', Electrical: 'battery-automotive', Transmission: 'manual-gearbox'
+};
 const FAST_SENSOR_IDS = ['rpm', 'speed', 'load', 'throttle'];
 const POLL_INTERVALS = {
   rpm: 120, speed: 120, load: 250, throttle: 250, maf: 500, timing: 500,
@@ -162,7 +167,7 @@ function renderSensorRows() {
   $('#sensorRate').textContent = state.mode === 'idle' ? '0' : state.mode === 'demo' ? '24' : currentSampleRate().toFixed(1);
   $('#sensorRows').innerHTML = visible.length ? visible.map((sensor) => `
     <div class="sensor-row">
-      <div class="sensor-name"><span class="sensor-glyph">${sensor.group.slice(0, 2).toUpperCase()}</span><div><strong>${sensor.name}</strong><small>${sensor.group}</small></div></div>
+      <div class="sensor-name"><span class="sensor-glyph" aria-hidden="true"><i class="icon icon-${SENSOR_ICONS[sensor.group] || 'adjustments-horizontal'}"></i></span><div><strong>${sensor.name}</strong><small>${sensor.group}</small></div></div>
       <span class="pid-code">${sensor.command ? 'AT RV' : `01 ${sensor.pid}`}</span>
       <strong class="live-value" data-sensor-value="${sensor.id}">${formatValue(sensor, state.values[sensor.id])}</strong>
       <span class="sensor-range">${sensor.range}</span>
@@ -286,12 +291,12 @@ function renderCodes() {
   $('#milStatus').textContent = idle ? '—' : state.codes.length ? 'On' : 'Off';
   $('#milDistance').textContent = idle ? '—' : formatValue(sensorById('distanceMil'), state.values.distanceMil);
   $$('.monitor-row em').forEach((element, index) => { element.textContent = idle ? '—' : index === 2 ? 'Incomplete' : 'Ready'; element.classList.toggle('ready', !idle && index !== 2); });
-  $('#codesList').innerHTML = idle ? '<div class="no-codes panel"><div><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4v4M16 4v4M7 8h10v8H7zM9 16v4M15 16v4"/></svg><h3>Connect to diagnose</h3><p>Select an OBD adapter before requesting trouble codes.</p></div></div>' : state.codes.length ? state.codes.map((item) => `
+  $('#codesList').innerHTML = idle ? '<div class="no-codes panel"><div><i class="icon icon-plug-connected" aria-hidden="true"></i><h3>Connect to diagnose</h3><p>Select an OBD adapter before requesting trouble codes.</p></div></div>' : state.codes.length ? state.codes.map((item) => `
     <article class="code-card panel">
       <div class="code-id"><strong>${item.code}</strong><span>${item.status.toUpperCase()}</span></div>
       <div class="code-copy"><strong>${item.title}</strong><p>${item.detail}</p></div>
-      <div class="code-domain"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 14h2l2-5 4 10 3-7 2 2h3"/></svg>${item.domain}</div>
-    </article>`).join('') : '<div class="no-codes panel"><div><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg><h3>No codes found</h3><p>The connected ECU reported no stored or pending trouble codes.</p></div></div>';
+      <div class="code-domain"><i class="icon icon-activity-heartbeat" aria-hidden="true"></i>${item.domain}</div>
+    </article>`).join('') : '<div class="no-codes panel"><div><i class="icon icon-circle-check" aria-hidden="true"></i><h3>No codes found</h3><p>The connected ECU reported no stored or pending trouble codes.</p></div></div>';
 }
 
 function navigate(view, updateHash = true) {
@@ -822,6 +827,7 @@ $('#chartSearch').addEventListener('input', (event) => { state.chartSearch = eve
 $('#pauseChart').addEventListener('click', () => {
   state.paused = !state.paused;
   $('#pauseChart').lastChild.textContent = state.paused ? 'Resume' : 'Pause';
+  $('#pauseChart .icon').className = `icon icon-player-${state.paused ? 'play' : 'pause'}`;
   $('.stream-state').classList.toggle('paused', state.paused);
   $('#streamText').textContent = state.paused ? 'PAUSED' : 'STREAMING';
 });
