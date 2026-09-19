@@ -79,7 +79,6 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .main-area { min-width: 0; padding: 0 4.5vw 50px; }
 .topbar { height: 118px; display: flex; align-items: center; gap: 16px; border-bottom: 1px solid var(--line); margin-bottom: 34px; }
 .topbar h1 { font-family: "Barlow Condensed", sans-serif; font-size: clamp(2rem, 3vw, 2.7rem); line-height: .95; margin: 3px 0 0; text-transform: uppercase; letter-spacing: .01em; }
-.eyebrow { margin: 0; color: var(--amber-dark); font-size: .68rem; font-weight: 700; letter-spacing: .22em; }
 .topbar-meta { margin-left: auto; display: flex; align-items: center; gap: 24px; color: var(--muted); font-size: .8rem; }
 .connection-state { display: flex; align-items: center; gap: 8px; }
 .connection-state i { width: 7px; height: 7px; background: #a5a89e; border-radius: 50%; }
