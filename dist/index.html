@@ -129,7 +129,7 @@
           </div>
           <div class="sensor-toolbar panel">
             <label class="search-box"><i class="icon icon-search" aria-hidden="true"></i><input id="sensorSearch" type="search" placeholder="Search sensors or PIDs" autocomplete="off" /></label>
-            <div class="segmented" role="group" aria-label="Filter sensors"><button class="is-selected" data-filter="all">All</button><button data-filter="available">Available</button><button data-filter="unavailable">Unavailable</button></div>
+            <div class="segmented" role="group" aria-label="Filter sensors"><button data-filter="all">All</button><button class="is-selected" data-filter="available">Available</button><button data-filter="unavailable">Unavailable</button></div>
           </div>
           <div class="sensor-table panel">
             <div class="sensor-row sensor-head"><span>Sensor</span><span>PID</span><span>Live value</span><span>Range</span><span>Status</span></div>
@@ -167,7 +167,7 @@
           <div class="health-banner panel">
             <div class="health-icon"><i class="icon icon-activity-heartbeat" aria-hidden="true"></i></div>
             <div><span>POWERTRAIN HEALTH</span><strong id="healthTitle">Not connected</strong><p id="healthCopy">Connect an OBD adapter to scan the engine control module.</p></div>
-            <div class="issue-count"><strong id="issueCount">00</strong><span>CODES FOUND</span></div>
+            <div class="issue-count"><strong id="issueCount">0</strong><span>CODES FOUND</span></div>
           </div>
           <div class="diagnostic-layout">
             <div class="codes-list" id="codesList"></div>
@@ -209,6 +209,6 @@
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script src="safety.js?v=1"></script>
     <script src="vin.js?v=1"></script>
-    <script src="app.js?v=15"></script>
+    <script src="app.js?v=17"></script>
   </body>
 </html>

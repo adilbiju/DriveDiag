@@ -67,7 +67,7 @@ const state = {
   responseBuffer: '', pendingCommand: null, pollTimer: null, pollingIndex: 0, suspendPolling: false,
   sensorLastPolled: {}, fastBundleIds: [], lastFastPoll: 0, fastTimingConfigured: false, sampleTimestamps: [],
   values: { ...emptyValues }, sensorUpdatedAt: {}, selected: [], history: {}, paused: false,
-  sensorFilter: 'all', sensorSearch: '', chartSearch: '',
+  sensorFilter: 'available', sensorSearch: '', chartSearch: '',
   tripMiles: 0, speedSamples: [], codes: [], codeScanComplete: false, aiPending: false, analysisRevision: 0,
   vinRevision: 0, vehicleIdentityState: 'idle', vehicleIdentityMessage: '', connectionFallbackLabel: 'Not connected'
 };
@@ -436,7 +436,7 @@ function enrichCode(code, status = 'Stored') {
 }
 
 function renderCodes() {
-  $('#issueCount').textContent = String(state.codes.length).padStart(2, '0');
+  $('#issueCount').textContent = String(state.codes.length);
   const idle = state.mode === 'idle';
   $('#healthTitle').textContent = idle ? 'Not connected' : !state.codeScanComplete ? 'Scan needed' : state.codes.length ? `${state.codes.length} issue${state.codes.length === 1 ? '' : 's'} need attention` : 'No trouble codes reported';
   $('#healthCopy').textContent = idle ? 'Connect an OBD adapter to scan the engine control module.' : !state.codeScanComplete ? 'No code scan has completed yet.' : state.mode === 'demo' ? 'Optional demo codes are shown. Connect a vehicle for a real scan.' : state.codes.length ? 'Codes were returned by the connected engine control module.' : 'The engine control module returned no stored or pending codes.';
