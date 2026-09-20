@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { parseResponse, validVin } = require('../dist/vin.js');
+const { parseResponse, validVin } = require('../public/vin.js');
 
 const vin = '1D4GP00R55B123456';
 test('parses ELM CAN VIN frames and ignores length line', () => {

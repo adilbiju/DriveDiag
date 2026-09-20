@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { evaluate } = require('../dist/safety.js');
+const { evaluate } = require('../public/safety.js');
 
 const now = 100000;
 const baseline = { mode: 'vehicle', now, codes: [], values: { coolant: 190, rpm: 900, shortFuel: 2, longFuel: 2 }, updatedAt: { coolant: now, rpm: now, shortFuel: now, longFuel: now } };

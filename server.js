@@ -2,7 +2,7 @@ const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const publicDir = path.join(__dirname, 'dist');
+const publicDir = path.join(__dirname, 'public');
 function resolveGeminiModel(configured = process.env.GEMINI_MODEL) {
   return (configured || 'gemini-3.5-flash-lite').trim().replace(/^models\//, '');
 }

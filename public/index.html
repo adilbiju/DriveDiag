@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#10120f" />
+    <meta name="description" content="Browser-based live OBD-II telemetry, sensor visualization, and diagnostics." />
+    <link rel="icon" type="image/svg+xml" sizes="any" href="assets/favicon.svg?v=tabler-1" />
+    <title>DriveDiag — Vehicle telemetry</title>
+    <link rel="stylesheet" href="styles.css?v=15" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Primary navigation">
+        <a class="brand" href="#dashboard" aria-label="DriveDiag home">
+          <img class="brand-mark" src="assets/favicon.svg?v=tabler-1" width="34" height="34" alt="" />
+          <span>Drive<span>Diag</span></span>
+        </a>
+
+        <nav class="nav-list">
+          <button class="nav-item is-active" data-view="dashboard" aria-current="page">
+            <i class="icon icon-dashboard" aria-hidden="true"></i>
+            <span>Dashboard</span>
+          </button>
+          <button class="nav-item" data-view="sensors">
+            <i class="icon icon-adjustments-horizontal" aria-hidden="true"></i>
+            <span>Sensors</span>
+          </button>
+          <button class="nav-item" data-view="visualize">
+            <i class="icon icon-graph" aria-hidden="true"></i>
+            <span>Visualize</span>
+          </button>
+          <button class="nav-item" data-view="diagnose">
+            <i class="icon icon-engine" aria-hidden="true"></i>
+            <span>Diagnose</span>
+          </button>
+        </nav>
+
+        <div class="sidebar-foot">
+          <div class="adapter-card">
+            <div class="adapter-icon" aria-hidden="true">
+              <i class="icon icon-plug-connected" aria-hidden="true"></i>
+            </div>
+            <div><small>Adapter</small><strong id="adapterName">Not connected</strong></div>
+          </div>
+          <button class="connect-btn" id="connectButton">
+            <span class="status-dot"></span><span>Connect OBD</span>
+          </button>
+        </div>
+      </aside>
+
+      <main class="main-area">
+        <header class="topbar">
+          <button class="mobile-menu" id="mobileMenu" aria-label="Open navigation">
+            <i class="icon icon-menu-2" aria-hidden="true"></i>
+          </button>
+          <div>
+            <h1>Dashboard</h1>
+          </div>
+          <div class="topbar-meta">
+            <span class="connection-state"><i></i><span id="connectionLabel">Not connected</span></span>
+            <span class="clock" id="clock">--:--:--</span>
+          </div>
+        </header>
+
+        <section class="view is-visible" id="dashboard" aria-labelledby="dashboard-title">
+          <h2 class="sr-only" id="dashboard-title">Live dashboard</h2>
+          <div class="connect-prompt panel" id="connectPrompt">
+            <div class="prompt-icon" aria-hidden="true"><i class="icon icon-plug-connected"></i></div>
+            <div><span>VEHICLE NOT CONNECTED</span><strong>Connect your OBD-II adapter to begin</strong><p>Turn the ignition on, then select your OBD-II adapter.</p></div>
+            <button class="prompt-connect" id="dashboardConnect"><i class="icon icon-bluetooth" aria-hidden="true"></i>Connect OBD</button>
+          </div>
+          <div class="safety-panel panel" id="safetyPanel" role="alert" hidden>
+            <div class="safety-mark"><i class="icon icon-alert-triangle" aria-hidden="true"></i></div>
+            <div><span id="safetyLevel">VEHICLE ADVISORY</span><strong id="safetyTitle"></strong><p id="safetyDetail"></p><ul id="safetyMore"></ul></div>
+          </div>
+          <div class="dashboard-grid">
+            <article class="hero-gauge panel">
+              <div class="panel-heading">
+                <div><span class="kicker">Vehicle speed</span><strong>ROAD SPEED</strong></div>
+                <span class="live-tag offline">OFFLINE</span>
+              </div>
+              <div class="speed-stage">
+                <div class="speed-gauge" aria-label="Speed unavailable until an adapter connects">
+                  <svg viewBox="0 0 300 188" role="img">
+                    <path class="gauge-track" d="M42 156A112 112 0 0 1 258 156" />
+                    <path class="gauge-value" id="speedArc" d="M42 156A112 112 0 0 1 258 156" />
+                    <g class="gauge-ticks" id="speedTicks"></g>
+                  </svg>
+                  <div class="speed-readout"><strong id="speedValue">—</strong><span>MPH</span></div>
+                </div>
+                <div class="drive-stats">
+                  <div><span>Trip</span><strong id="tripValue">—</strong></div>
+                  <div><span>Avg. speed</span><strong id="avgValue">—</strong></div>
+                </div>
+              </div>
+            </article>
+
+            <article class="rpm-panel panel">
+              <div class="panel-heading">
+                <div><span class="kicker">Engine load</span><strong>ENGINE SPEED</strong></div>
+                <i class="icon icon-engine engine-icon" aria-hidden="true"></i>
+              </div>
+              <div class="rpm-number"><strong id="rpmValue">—</strong><span>RPM</span></div>
+              <div class="rpm-bar"><i id="rpmBar"></i><b></b></div>
+              <div class="rpm-scale"><span>0</span><span>2</span><span>4</span><span>6</span><span>8 × 1000</span></div>
+              <div class="load-line"><span>Calculated load</span><strong id="loadValue">—</strong></div>
+            </article>
+
+            <article class="metric-card panel temperature">
+              <div class="metric-icon"><i class="icon icon-temperature" aria-hidden="true"></i></div>
+              <span>COOLANT TEMP</span><strong><b id="tempValue">—</b><em hidden>°F</em></strong><div class="mini-bar"><i></i></div><small>Awaiting data</small>
+            </article>
+            <article class="metric-card panel fuel">
+              <div class="metric-icon"><i class="icon icon-gas-station" aria-hidden="true"></i></div>
+              <span>FUEL LEVEL</span><strong><b id="fuelValue">—</b><em hidden>%</em></strong><div class="mini-bar"><i></i></div><small>Awaiting data</small>
+            </article>
+            <article class="metric-card panel voltage">
+              <div class="metric-icon"><i class="icon icon-battery-automotive" aria-hidden="true"></i></div>
+              <span>OBD SUPPLY</span><strong><b id="voltageValue">—</b><em hidden>V</em></strong><div class="mini-bar"><i></i></div><small>Awaiting data</small>
+            </article>
+          </div>
+        </section>
+
+        <section class="view" id="sensors" aria-labelledby="sensors-heading">
+          <div class="section-intro">
+            <div><p class="kicker">LIVE DATA</p><h2 id="sensors-heading">Sensor inventory</h2><p> Sensor availability is confirmed when a vehicle connects.</p></div>
+            <div class="summary-chips"><span><b id="availableCount">0</b> available</span><span><b id="sensorRate">0</b> samples/sec</span></div>
+          </div>
+          <div class="sensor-toolbar panel">
+            <label class="search-box"><i class="icon icon-search" aria-hidden="true"></i><input id="sensorSearch" type="search" placeholder="Search sensors or PIDs" autocomplete="off" /></label>
+            <div class="segmented" role="group" aria-label="Filter sensors"><button data-filter="all">All</button><button class="is-selected" data-filter="available">Available</button><button data-filter="unavailable">Unavailable</button></div>
+          </div>
+          <div class="sensor-table panel">
+            <div class="sensor-row sensor-head"><span>Sensor</span><span>PID</span><span>Live value</span><span>Range</span><span>Status</span></div>
+            <div id="sensorRows"></div>
+          </div>
+        </section>
+
+        <section class="view" id="visualize" aria-labelledby="visualize-heading">
+          <div class="section-intro">
+            <div><p class="kicker">LIVE SIGNAL ANALYSIS</p><h2 id="visualize-heading">Visualize</h2><p>Overlay up to four signals. Each trace is normalized so different units remain easy to compare.</p></div>
+            <div class="chart-actions"><button class="quiet-btn" id="resetChart"><i class="icon icon-refresh" aria-hidden="true"></i>Reset</button><button class="dark-btn" id="pauseChart"><i class="icon icon-player-pause" aria-hidden="true"></i>Pause</button></div>
+          </div>
+          <div class="visual-grid">
+            <aside class="signal-picker panel">
+              <div class="picker-head"><strong>Signals</strong><span><b id="selectedCount">0</b>/4</span></div>
+              <label class="search-box compact"><i class="icon icon-search" aria-hidden="true"></i><input id="chartSearch" type="search" placeholder="Find a signal" autocomplete="off" /></label>
+              <div id="signalOptions" class="signal-options"></div>
+            </aside>
+            <div class="chart-panel panel">
+              <div class="chart-head">
+                <div><span>60 SECOND WINDOW</span><strong>LIVE COMPARISON</strong></div>
+                <span class="stream-state paused"><i></i><b id="streamText">WAITING FOR VEHICLE</b></span>
+              </div>
+              <div class="chart-wrap"><canvas id="liveChart" aria-label="Live chart of selected vehicle sensors"></canvas><div class="chart-y-labels"><span>100%</span><span>75%</span><span>50%</span><span>25%</span><span>0%</span></div></div>
+              <div class="chart-legend" id="chartLegend"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="diagnose" aria-labelledby="diagnose-heading">
+          <div class="section-intro">
+            <div><p class="kicker">TROUBLE CODES</p><h2 id="diagnose-heading">Diagnose</h2><p>Read stored and pending DTCs from the engine control module.</p></div>
+            <button class="dark-btn" id="scanCodes"><i class="icon icon-refresh" aria-hidden="true"></i>Scan codes</button>
+          </div>
+          <div class="health-banner panel">
+            <div class="health-icon"><i class="icon icon-activity-heartbeat" aria-hidden="true"></i></div>
+            <div><span>POWERTRAIN HEALTH</span><strong id="healthTitle">Not connected</strong><p id="healthCopy">Connect an OBD adapter to scan the engine control module.</p></div>
+            <div class="issue-count"><strong id="issueCount">0</strong><span>CODES FOUND</span></div>
+          </div>
+          <div class="diagnostic-layout">
+            <div class="codes-list" id="codesList"></div>
+            <aside class="diagnostic-side panel">
+              <div class="side-block"><span>MONITOR STATUS</span><div class="monitor-row"><strong>Misfire</strong><em class="ready">Ready</em></div><div class="monitor-row"><strong>Fuel system</strong><em class="ready">Ready</em></div><div class="monitor-row"><strong>Catalyst</strong><em>Incomplete</em></div><div class="monitor-row"><strong>O₂ sensor</strong><em class="ready">Ready</em></div></div>
+              <div class="side-block"><span>VEHICLE INFO</span><div class="info-row"><small>Protocol</small><strong id="protocolValue">Awaiting connection</strong></div><div class="info-row"><small>MIL status</small><strong id="milStatus">—</strong></div><div class="info-row"><small>Distance with MIL</small><strong id="milDistance">—</strong></div></div>
+              <button class="danger-btn" id="clearCodes"><i class="icon icon-trash" aria-hidden="true"></i>Clear trouble codes</button>
+              <p class="clear-note">Clearing codes also resets readiness monitors. Repair the underlying fault first.</p>
+            </aside>
+          </div>
+          <section class="ai-panel panel" aria-labelledby="ai-heading">
+            <div class="ai-head"><div><span class="kicker">OPTIONAL · AI-ASSISTED</span><h3 id="ai-heading">Troubleshoot with AI</h3><p>Send the current DTCs and available sensor snapshot to Gemini for possible causes and next checks. AI suggestions are not a diagnosis.</p></div><span class="ai-provider">GEMINI</span></div>
+            <div class="vehicle-identity" role="status">
+              <span>VEHICLE</span><strong id="vehicleIdentityTitle">Not connected</strong><p id="vehicleIdentityNote">Connect an OBD adapter to identify the vehicle automatically.</p>
+            </div>
+            <div class="vehicle-fields" id="manualVehicleFields" hidden>
+              <label>Year <input id="vehicleYear" type="number" min="1980" max="2100" inputmode="numeric" placeholder="e.g. 2012" /></label>
+              <label>Make <input id="vehicleMake" type="text" maxlength="40" placeholder="e.g. Honda" /></label>
+              <label>Model <input id="vehicleModel" type="text" maxlength="60" placeholder="e.g. Civic" /></label>
+            </div>
+            <div class="ai-actions"><button class="dark-btn" id="analyzeAi" disabled>Analyze snapshot</button><span id="aiSnapshotHint">Connect and scan codes first.</span></div>
+            <div class="ai-result" id="aiResult" aria-live="polite" hidden><strong id="aiResultHeading">Suggested next steps</strong><pre id="aiResultText"></pre><p id="aiResultCaution">Verify all procedures and specifications against your vehicle’s service information. Never rely on AI for a stop-driving decision.</p></div>
+          </section>
+        </section>
+      </main>
+    </div>
+    <dialog class="connect-dialog" id="connectDialog" aria-labelledby="connect-title">
+      <form method="dialog" class="dialog-card">
+        <button class="dialog-close" value="cancel" aria-label="Close"><i class="icon icon-x" aria-hidden="true"></i></button>
+        <div class="dialog-icon"><i class="icon icon-bluetooth" aria-hidden="true"></i></div>
+        <p class="kicker">WEB BLUETOOTH</p>
+        <h2 id="connect-title">Connect an OBD adapter</h2>
+        <p>Plug your adapter into the vehicle, turn the ignition on, then find a compatible OBD device.</p>
+        <button type="button" class="pair-btn" id="pairDevice"><i class="icon icon-bluetooth" aria-hidden="true"></i><span>Find OBD devices</span></button>
+        <button type="button" class="all-devices-btn" id="showAllDevices">Adapter not listed? Show all devices</button>
+        <button type="button" class="demo-btn" id="useDemo">Continue with demo data</button>
+      </form>
+    </dialog>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="safety.js?v=1"></script>
+    <script src="vin.js?v=1"></script>
+    <script src="app.js?v=17"></script>
+  </body>
+</html>
