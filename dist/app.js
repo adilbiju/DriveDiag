@@ -66,9 +66,10 @@ const state = {
   mode: 'idle', device: null, server: null, writeCharacteristic: null, notifyCharacteristic: null,
   responseBuffer: '', pendingCommand: null, pollTimer: null, pollingIndex: 0, suspendPolling: false,
   sensorLastPolled: {}, fastBundleIds: [], lastFastPoll: 0, fastTimingConfigured: false, sampleTimestamps: [],
-  values: { ...emptyValues }, selected: [], history: {}, paused: false,
+  values: { ...emptyValues }, sensorUpdatedAt: {}, selected: [], history: {}, paused: false,
   sensorFilter: 'all', sensorSearch: '', chartSearch: '',
-  tripMiles: 0, speedSamples: [], codes: []
+  tripMiles: 0, speedSamples: [], codes: [], codeScanComplete: false, aiPending: false, analysisRevision: 0,
+  vinRevision: 0, vehicleIdentityState: 'idle', vehicleIdentityMessage: '', connectionFallbackLabel: 'Not connected'
 };
 
 let toastTimer;
@@ -154,6 +155,158 @@ function updateLiveValues() {
     element.textContent = formatValue(sensor, state.values[sensor.id]);
   });
   updateDashboard();
+  renderSafety();
+}
+
+function renderSafety() {
+  const alerts = DriveDiagSafety.evaluate({ mode: state.mode, values: state.values, updatedAt: state.sensorUpdatedAt, codes: state.codes });
+  const panel = $('#safetyPanel');
+  panel.hidden = !alerts.length;
+  if (!alerts.length) return;
+  const primary = alerts[0];
+  panel.classList.toggle('stop', primary.level === 'stop');
+  $('#safetyLevel').textContent = primary.level === 'stop' ? 'PULL OVER SAFELY' : 'VEHICLE ADVISORY';
+  $('#safetyTitle').textContent = primary.title;
+  $('#safetyDetail').textContent = primary.detail;
+  $('#safetyMore').replaceChildren(...alerts.slice(1).map((alert) => {
+    const item = document.createElement('li');
+    item.textContent = `${alert.title}: ${alert.detail}`;
+    return item;
+  }));
+}
+
+function updateAiAvailability() {
+  const year = Number($('#vehicleYear').value);
+  const manualReady = state.vehicleIdentityState === 'fallback' && Number.isInteger(year) && year >= 1980 && year <= 2100 && $('#vehicleMake').value.trim() && $('#vehicleModel').value.trim();
+  const identityReady = state.mode === 'demo' || state.vehicleIdentityState === 'identified' || manualReady;
+  const ready = state.mode !== 'idle' && state.codeScanComplete && identityReady;
+  $('#analyzeAi').disabled = !ready || state.aiPending;
+  $('#aiSnapshotHint').textContent = state.aiPending ? 'Analyzing…' : state.mode === 'idle' ? 'Connect an OBD adapter first.' : !state.codeScanComplete ? 'Scan codes before analyzing.' : state.vehicleIdentityState === 'loading' || state.vehicleIdentityState === 'waiting' ? 'Identifying the vehicle…' : state.vehicleIdentityState === 'fallback' && !manualReady ? 'Enter year, make and model first.' : state.mode === 'demo' ? 'Demo data will be sent.' : 'Ready to send a snapshot.';
+}
+
+function resetAiResult() {
+  state.analysisRevision += 1;
+  $('#aiResult').hidden = true;
+  $('#aiResult').classList.remove('error');
+  $('#aiResultHeading').textContent = 'Suggested next steps';
+  $('#aiResultCaution').hidden = false;
+  $('#aiResultText').textContent = '';
+  updateAiAvailability();
+}
+
+function renderVehicleIdentity() {
+  const status = state.vehicleIdentityState;
+  const labels = {
+    idle: ['Not connected', 'Connect an OBD adapter to identify the vehicle automatically.'],
+    waiting: ['Waiting for vehicle', 'Turn the ignition on so the adapter can read the vehicle.'],
+    loading: ['Identifying vehicle…', 'Reading the VIN from OBD and decoding year, make and model.'],
+    identified: [`${$('#vehicleYear').value} ${$('#vehicleMake').value} ${$('#vehicleModel').value}`, 'Identified automatically from the vehicle VIN.'],
+    fallback: ['Vehicle details needed', state.vehicleIdentityMessage || 'Automatic VIN identification was unavailable. Enter year, make and model below.'],
+    demo: ['Demo vehicle', 'Synthetic data; no vehicle is connected.']
+  };
+  $('#vehicleIdentityTitle').textContent = labels[status][0];
+  $('#vehicleIdentityNote').textContent = labels[status][1];
+  $('#manualVehicleFields').hidden = status !== 'fallback';
+  updateConnectionLabel();
+  updateAiAvailability();
+}
+
+function resetVehicleIdentity() {
+  state.vinRevision += 1;
+  state.vehicleIdentityState = state.mode === 'vehicle' ? 'waiting' : state.mode === 'demo' ? 'demo' : 'idle';
+  state.vehicleIdentityMessage = '';
+  $('#vehicleYear').value = '';
+  $('#vehicleMake').value = '';
+  $('#vehicleModel').value = '';
+  renderVehicleIdentity();
+}
+
+async function identifyVehicleAutomatically() {
+  if (state.mode !== 'vehicle' || !['waiting', 'loading'].includes(state.vehicleIdentityState)) return;
+  const revision = ++state.vinRevision;
+  state.vehicleIdentityState = 'loading';
+  renderVehicleIdentity();
+  let vin;
+  state.suspendPolling = true;
+  try {
+    while (state.pendingCommand) await sleep(40);
+    if (state.mode !== 'vehicle' || revision !== state.vinRevision) return;
+    vin = DriveDiagVin.parseResponse(await sendCommand('0902', 6500));
+    if (!vin) throw new Error('The vehicle did not return a complete VIN.');
+  } catch (error) {
+    if (revision === state.vinRevision) {
+      state.vehicleIdentityState = 'fallback';
+      state.vehicleIdentityMessage = 'The VIN could not be read from OBD. Enter year, make and model below.';
+      renderVehicleIdentity();
+    }
+    return;
+  } finally { state.suspendPolling = false; }
+
+  if (state.mode !== 'vehicle' || revision !== state.vinRevision) return;
+  try {
+    const response = await fetch('/api/decode-vin', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ vin }) });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || 'VIN lookup failed.');
+    if (state.mode !== 'vehicle' || revision !== state.vinRevision) return;
+    $('#vehicleYear').value = data.year;
+    $('#vehicleMake').value = data.make;
+    $('#vehicleModel').value = data.model;
+    state.vehicleIdentityState = data.partial ? 'fallback' : 'identified';
+    state.vehicleIdentityMessage = data.partial ? 'The VIN lookup could not identify the model. Enter it below.' : '';
+    renderVehicleIdentity();
+    resetAiResult();
+  } catch {
+    if (state.mode !== 'vehicle' || revision !== state.vinRevision) return;
+    state.vehicleIdentityState = 'fallback';
+    state.vehicleIdentityMessage = 'The VIN lookup failed. Enter year, make and model below.';
+    renderVehicleIdentity();
+  }
+}
+
+async function inspectConnectedVehicle() {
+  if (state.mode !== 'vehicle' || state.vehicleIdentityState !== 'waiting') return;
+  state.vehicleIdentityState = 'loading';
+  renderVehicleIdentity();
+  await scanCodes();
+  if (state.mode === 'vehicle') await identifyVehicleAutomatically();
+}
+
+async function analyzeWithAi() {
+  if (state.mode === 'idle' || !state.codeScanComplete || state.aiPending || $('#analyzeAi').disabled) return;
+  const year = $('#vehicleYear').value.trim();
+  if (year && (!/^\d{4}$/.test(year) || Number(year) < 1980 || Number(year) > 2100)) {
+    showToast('Enter a valid four-digit model year or leave it blank.');
+    return;
+  }
+  const now = Date.now();
+  const sensors = SENSOR_DEFS.filter((sensor) => sensor.available && Number.isFinite(state.values[sensor.id]) && now - (state.sensorUpdatedAt[sensor.id] || 0) <= 30000)
+    .map((sensor) => ({ id: sensor.id, name: sensor.name, value: Number(state.values[sensor.id].toFixed(2)), unit: sensor.unit }));
+  const snapshot = {
+    source: state.mode,
+    sampledAt: new Date(now).toISOString(),
+    vehicle: { year: year ? Number(year) : null, make: $('#vehicleMake').value.trim().slice(0, 40), model: $('#vehicleModel').value.trim().slice(0, 60) },
+    codes: state.codes.map(({ code, status }) => ({ code, status })),
+    sensors
+  };
+  state.aiPending = true;
+  resetAiResult();
+  const revision = state.analysisRevision;
+  try {
+    const response = await fetch('/api/analyze', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(snapshot) });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || `Analysis failed (${response.status}).`);
+    if (revision !== state.analysisRevision) return;
+    $('#aiResultText').textContent = data.analysis;
+    $('#aiResult').hidden = false;
+  } catch (error) {
+    if (revision === state.analysisRevision) {
+      $('#aiResultHeading').textContent = 'Analysis unavailable';
+      $('#aiResultText').textContent = error instanceof SyntaxError ? 'AI needs the localhost app server. Start it with npm start.' : error.message;
+      $('#aiResultCaution').hidden = true;
+      $('#aiResult').classList.add('error');
+      $('#aiResult').hidden = false;
+    }
+  } finally { state.aiPending = false; updateAiAvailability(); }
 }
 
 function renderSensorRows() {
@@ -285,18 +438,20 @@ function enrichCode(code, status = 'Stored') {
 function renderCodes() {
   $('#issueCount').textContent = String(state.codes.length).padStart(2, '0');
   const idle = state.mode === 'idle';
-  $('#healthTitle').textContent = idle ? 'Not connected' : state.codes.length ? `${state.codes.length} issue${state.codes.length === 1 ? '' : 's'} need attention` : 'No trouble codes reported';
-  $('#healthCopy').textContent = idle ? 'Connect an OBD adapter to scan the engine control module.' : state.mode === 'demo' ? 'Optional demo codes are shown. Connect a vehicle for a real scan.' : state.codes.length ? 'Codes were returned by the connected engine control module.' : 'The engine control module returned no stored or pending codes.';
-  $('#protocolValue').textContent = idle ? 'Awaiting connection' : state.mode === 'demo' ? 'Demo · ISO 15765-4' : 'ISO 15765-4 CAN';
-  $('#milStatus').textContent = idle ? '—' : state.codes.length ? 'On' : 'Off';
+  $('#healthTitle').textContent = idle ? 'Not connected' : !state.codeScanComplete ? 'Scan needed' : state.codes.length ? `${state.codes.length} issue${state.codes.length === 1 ? '' : 's'} need attention` : 'No trouble codes reported';
+  $('#healthCopy').textContent = idle ? 'Connect an OBD adapter to scan the engine control module.' : !state.codeScanComplete ? 'No code scan has completed yet.' : state.mode === 'demo' ? 'Optional demo codes are shown. Connect a vehicle for a real scan.' : state.codes.length ? 'Codes were returned by the connected engine control module.' : 'The engine control module returned no stored or pending codes.';
+  $('#protocolValue').textContent = idle ? 'Awaiting connection' : state.mode === 'demo' ? 'Demo' : 'Not read';
+  $('#milStatus').textContent = idle ? '—' : 'Not read';
   $('#milDistance').textContent = idle ? '—' : formatValue(sensorById('distanceMil'), state.values.distanceMil);
-  $$('.monitor-row em').forEach((element, index) => { element.textContent = idle ? '—' : index === 2 ? 'Incomplete' : 'Ready'; element.classList.toggle('ready', !idle && index !== 2); });
-  $('#codesList').innerHTML = idle ? '<div class="no-codes panel"><div><i class="icon icon-plug-connected" aria-hidden="true"></i><h3>Connect to diagnose</h3><p>Select an OBD adapter before requesting trouble codes.</p></div></div>' : state.codes.length ? state.codes.map((item) => `
+  $$('.monitor-row em').forEach((element) => { element.textContent = idle ? '—' : 'Not read'; element.classList.remove('ready'); });
+  $('#codesList').innerHTML = idle ? '<div class="no-codes panel"><div><i class="icon icon-plug-connected" aria-hidden="true"></i><h3>Connect to diagnose</h3><p>Select an OBD adapter before requesting trouble codes.</p></div></div>' : !state.codeScanComplete ? '<div class="no-codes panel"><div><i class="icon icon-refresh" aria-hidden="true"></i><h3>Scan codes</h3><p>No trouble-code scan has completed yet.</p></div></div>' : state.codes.length ? state.codes.map((item) => `
     <article class="code-card panel">
       <div class="code-id"><strong>${item.code}</strong><span>${item.status.toUpperCase()}</span></div>
       <div class="code-copy"><strong>${item.title}</strong><p>${item.detail}</p></div>
       <div class="code-domain"><i class="icon icon-activity-heartbeat" aria-hidden="true"></i>${item.domain}</div>
     </article>`).join('') : '<div class="no-codes panel"><div><i class="icon icon-circle-check" aria-hidden="true"></i><h3>No codes found</h3><p>The connected ECU reported no stored or pending trouble codes.</p></div></div>';
+  renderSafety();
+  updateAiAvailability();
 }
 
 function navigate(view, updateHash = true) {
@@ -308,7 +463,6 @@ function navigate(view, updateHash = true) {
   });
   $$('.view').forEach((section) => section.classList.toggle('is-visible', section.id === view));
   $('.topbar h1').textContent = view[0].toUpperCase() + view.slice(1);
-  $('.eyebrow').textContent = view === 'dashboard' ? 'LIVE TELEMETRY' : 'OBD-II WORKSPACE';
   $('.sidebar').classList.remove('open');
   if (updateHash) history.replaceState(null, '', `#${view}`);
   if (view === 'visualize') setTimeout(drawChart, 20);
@@ -331,6 +485,7 @@ function tickDemo() {
   v.voltage = clamp(14.15 + (Math.random() - .5) * .12, 13.8, 14.5);
   v.fuelRate = clamp(1.1 + v.load * .11, .6, 28);
   v.torque = clamp(v.load - 8, -10, 100);
+  Object.keys(v).forEach((id) => { state.sensorUpdatedAt[id] = Date.now(); });
   state.tripMiles += v.speed / 4800;
   state.speedSamples.push(v.speed);
   if (state.speedSamples.length > 120) state.speedSamples.shift();
@@ -344,8 +499,18 @@ const UUIDS = {
   hm10: { label: 'HM-10 UART', service: '0000ffe0-0000-1000-8000-00805f9b34fb', write: '0000ffe1-0000-1000-8000-00805f9b34fb', notify: '0000ffe1-0000-1000-8000-00805f9b34fb' }
 };
 
-function setConnectionUI(label, connected) {
+function updateConnectionLabel() {
+  const make = $('#vehicleMake').value.trim();
+  const model = $('#vehicleModel').value.trim();
+  const hasVehicleIdentity = state.mode === 'vehicle' && ['identified', 'fallback'].includes(state.vehicleIdentityState) && make && model;
+  const label = hasVehicleIdentity ? `${make} ${model}` : state.connectionFallbackLabel;
   $('#connectionLabel').textContent = label;
+  $('#connectionLabel').title = label;
+}
+
+function setConnectionUI(label, connected) {
+  state.connectionFallbackLabel = label;
+  updateConnectionLabel();
   $('.connection-state i').style.background = connected ? '#a7db4f' : '#a5a89e';
   $('.connection-state i').style.boxShadow = connected ? '0 0 0 4px rgba(167,219,79,.14)' : 'none';
   $('.status-dot').style.background = connected ? '#a7db4f' : '#656961';
@@ -408,8 +573,12 @@ async function connectBluetooth(showAll = false) {
     state.mode = 'vehicle';
     clearInterval(demoTimer);
     state.values = { ...emptyValues };
+    state.sensorUpdatedAt = {};
     state.history = {};
     state.codes = [];
+    state.codeScanComplete = false;
+    resetAiResult();
+    resetVehicleIdentity();
     state.tripMiles = 0;
     state.speedSamples = [];
     state.sensorLastPolled = {};
@@ -434,6 +603,7 @@ async function connectBluetooth(showAll = false) {
     if (supportedCount) {
       setConnectionUI(device.name || 'Vehicle connected', true);
       showToast(`${device.name || 'OBD adapter'} connected.`);
+      inspectConnectedVehicle();
     } else {
       setConnectionUI(`${device.name || 'Adapter'} · waiting for vehicle`, true);
       showToast('Adapter connected, but the vehicle has not responded. Keep the ignition on; detection will retry.');
@@ -558,7 +728,8 @@ async function configureFastTiming() {
 function applySensorValue(sensor, value) {
   if (!Number.isFinite(value)) return false;
   state.values[sensor.id] = value;
-  state.sampleTimestamps.push(Date.now());
+  state.sensorUpdatedAt[sensor.id] = Date.now();
+  state.sampleTimestamps.push(state.sensorUpdatedAt[sensor.id]);
   const rateElement = $('#sensorRate');
   if (rateElement) rateElement.textContent = currentSampleRate().toFixed(1);
   if (sensor.id === 'speed') {
@@ -633,6 +804,7 @@ function startVehiclePolling() {
         await detectFastBundleSupport();
         setConnectionUI(state.device?.name || 'Vehicle connected', true);
         showToast('Vehicle data detected.');
+        inspectConnectedVehicle();
       }
       state.pollTimer = setTimeout(poll, supportedCount ? 5 : 5000);
       return;
@@ -683,8 +855,12 @@ function resetDisconnectedState(showDisconnectedToast = false) {
   state.device = null;
   state.mode = 'idle';
   state.values = { ...emptyValues };
+  state.sensorUpdatedAt = {};
   state.history = {};
   state.codes = [];
+  state.codeScanComplete = false;
+  resetAiResult();
+  resetVehicleIdentity();
   state.tripMiles = 0;
   state.speedSamples = [];
   state.sensorLastPolled = {};
@@ -727,6 +903,7 @@ function parseDtcResponse(response, replyMode, status) {
 
 async function scanCodes() {
   const button = $('#scanCodes');
+  if (state.suspendPolling) { showToast('Wait for the current OBD request to finish.'); return; }
   if (state.mode !== 'vehicle') {
     renderCodes();
     showToast(state.mode === 'demo' ? 'Connect a vehicle to replace the optional demo codes.' : 'Connect an OBD adapter before scanning.');
@@ -740,6 +917,8 @@ async function scanCodes() {
     const stored = await sendCommand('03', 4500);
     const pending = await sendCommand('07', 4500);
     state.codes = [...parseDtcResponse(stored, 0x43, 'Stored'), ...parseDtcResponse(pending, 0x47, 'Pending')];
+    state.codeScanComplete = true;
+    resetAiResult();
     renderCodes();
     showToast(state.codes.length ? `${state.codes.length} trouble code${state.codes.length === 1 ? '' : 's'} found.` : 'No trouble codes found.');
   } catch (error) { showToast(`Scan failed: ${error.message}`); }
@@ -748,6 +927,7 @@ async function scanCodes() {
 
 async function clearCodes() {
   if (state.mode === 'idle') { showToast('Connect an OBD adapter before clearing codes.'); return; }
+  if (state.suspendPolling) { showToast('Wait for the current OBD request to finish.'); return; }
   if (!confirm('Clear trouble codes and reset readiness monitors? Only continue after the underlying fault has been repaired.')) return;
   if (state.mode === 'vehicle') {
     state.suspendPolling = true;
@@ -756,6 +936,8 @@ async function clearCodes() {
     finally { state.suspendPolling = false; }
   }
   state.codes = [];
+  state.codeScanComplete = false;
+  resetAiResult();
   renderCodes();
   showToast(state.mode === 'vehicle' ? 'Clear command sent. Re-scan to confirm.' : 'Demo codes cleared.');
 }
@@ -764,7 +946,11 @@ function setDemoMode() {
   if (state.device?.gatt?.connected) state.device.gatt.disconnect();
   state.mode = 'demo';
   state.values = { ...initialValues };
+  state.sensorUpdatedAt = Object.fromEntries(Object.keys(initialValues).map((id) => [id, Date.now()]));
   state.codes = demoCodes.map((code) => ({ ...code }));
+  state.codeScanComplete = true;
+  resetAiResult();
+  resetVehicleIdentity();
   state.selected = ['rpm', 'speed', 'coolant'];
   state.tripMiles = 18.6;
   state.speedSamples = [48];
@@ -833,6 +1019,8 @@ $('#pauseChart').addEventListener('click', () => {
 });
 $('#resetChart').addEventListener('click', () => { state.history = {}; pushHistory(); showToast('Chart history reset.'); });
 $('#scanCodes').addEventListener('click', scanCodes);
+['#vehicleYear', '#vehicleMake', '#vehicleModel'].forEach((selector) => $(selector).addEventListener('input', () => { resetAiResult(); updateConnectionLabel(); }));
+$('#analyzeAi').addEventListener('click', analyzeWithAi);
 $('#clearCodes').addEventListener('click', clearCodes);
 window.addEventListener('resize', drawChart);
 window.addEventListener('hashchange', () => navigate(location.hash.slice(1) || 'dashboard', false));
@@ -842,7 +1030,13 @@ renderSensorRows();
 renderSignalOptions();
 renderCodes();
 updateLiveValues();
+renderVehicleIdentity();
 setConnectionUI('Not connected', false);
-setInterval(() => { $('#clock').textContent = new Date().toLocaleTimeString([], { hour12: false }); }, 1000);
+function updateClock() {
+  $('#clock').textContent = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true });
+}
+updateClock();
+setInterval(updateClock, 1000);
+setInterval(renderSafety, 2000);
 navigate(['dashboard', 'sensors', 'visualize', 'diagnose'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'dashboard', false);
 registerWebMcpTools();
