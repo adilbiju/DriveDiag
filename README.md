@@ -1,13 +1,14 @@
 # DriveDiag
 
-DriveDiag is a local web app for viewing OBD-II telemetry from a compatible Bluetooth Low Energy (BLE) adapter. It shows live readings, charts selected sensors, reads trouble codes, and an optional AI-assisted troubleshooting section.
+DriveDiag is a local web app for viewing OBD-II telemetry from a compatible Bluetooth Low Energy (BLE) adapter. It shows live readings, charts selected sensors, and reads trouble codes.
 
 ## What it does
 
 - **Dashboard:** speed, RPM, engine load, coolant temperature, fuel level, adapter supply voltage, and locally evaluated vehicle alerts.
 - **Sensors:** discover supported OBD-II PIDs, inspect available readings, and filter or search the sensor list.
 - **Visualize:** chart up to four available signals, with pause and reset controls.
-- **Diagnose:** scan stored and pending diagnostic trouble codes (DTCs), then optionally send a snapshot to Gemini for possible causes and next checks.
+- **Diagnose:** scan stored and pending diagnostic trouble codes (DTCs).
+- **Vehicle identity:** read the VIN from a responding vehicle and use NHTSA vPIC to display its make and model beside the clock when available.
 
 ## Requirements
 
@@ -30,21 +31,10 @@ To choose another port, run `PORT=4174 npm start` and open that port instead.
 
 In the app, select **Connect OBD**, choose your adapter, and allow the browser's Bluetooth request. The default picker filters for common OBD adapter names; use **Adapter not listed? Show all devices** if yours is hidden. Select **Continue with demo data** if you want to test out the interface with synthetic data.
 
-## Optional AI analysis
-
-The dashboard, sensor readings, charts, DTC scan, and local alerts work without an AI key. To enable **Analyze snapshot**, set `GEMINI_API_KEY` in the server process environment before starting DriveDiag. You can optionally set `GEMINI_MODEL`; the code defaults to `gemini-3.5-flash-lite`. Restart the server after changing either variable.
-
-```sh
-GEMINI_API_KEY={Enter-key} npm start
-```
-
-AI analysis is user-initiated after a code scan. It can be wrong and has not been given a vehicle service manual. Verify any procedure or specification against service information for your vehicle.
-
 ## Data handling
 
 - Live OBD readings and charts are kept in browser's local memory.
-- After the vehicle responds, the browser reads its VIN and requests year, make, and model from the **NHTSA vPIC API**. The VIN is not included in the Gemini snapshot.
-- Clicking **Analyze snapshot** sends DTCs, recent available sensor values, and year/make/model to the local server and then to the **Gemini API**. The Gemini key remains on the server.
+- After the vehicle responds, the browser reads its VIN and sends it to the local server, which requests year, make, and model from the **NHTSA vPIC API**. The VIN is not stored by this project.
 
 ## Safety and limitations
 
@@ -56,13 +46,12 @@ DriveDiag is a diagnostic aid, not a substitute for the vehicle's warnings, a se
 
 - **No adapter appears:** check that Bluetooth is enabled, use a Web Bluetooth-capable browser, and try **Show all devices**.
 - **Adapter connects but readings stay empty:** turn the ignition on and confirm the adapter supports BLE. Close other apps that may already be using it, then reconnect.
-- **VIN cannot be decoded:** enter year, make, and model in Diagnose. Vehicle data can still be viewed without successful VIN decoding.
-- **AI analysis fails:** check that `GEMINI_API_KEY` is set for the running server, that `GEMINI_MODEL` is available to that key, and that the provider's quota has not been reached.
+- **VIN cannot be decoded:** vehicle readings still work; the connection label falls back to the adapter name.
 
 ## Project layout
 
 ```text
 public/             Browser UI, Bluetooth/OBD logic, safety rules, VIN parser, and assets
-server.js           Local HTTP server, NHTSA lookup, and Gemini proxy
+server.js           Local HTTP server and NHTSA lookup
 package.json        Node.js requirement and start script
 ```

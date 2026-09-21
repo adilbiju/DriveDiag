@@ -178,19 +178,6 @@
               <p class="clear-note">Clearing codes also resets readiness monitors. Repair the underlying fault first.</p>
             </aside>
           </div>
-          <section class="ai-panel panel" aria-labelledby="ai-heading">
-            <div class="ai-head"><div><span class="kicker">OPTIONAL · AI-ASSISTED</span><h3 id="ai-heading">Troubleshoot with AI</h3><p>Send the current DTCs and available sensor snapshot to Gemini for possible causes and next checks. AI suggestions are not a diagnosis.</p></div><span class="ai-provider">GEMINI</span></div>
-            <div class="vehicle-identity" role="status">
-              <span>VEHICLE</span><strong id="vehicleIdentityTitle">Not connected</strong><p id="vehicleIdentityNote">Connect an OBD adapter to identify the vehicle automatically.</p>
-            </div>
-            <div class="vehicle-fields" id="manualVehicleFields" hidden>
-              <label>Year <input id="vehicleYear" type="number" min="1980" max="2100" inputmode="numeric" placeholder="e.g. 2012" /></label>
-              <label>Make <input id="vehicleMake" type="text" maxlength="40" placeholder="e.g. Honda" /></label>
-              <label>Model <input id="vehicleModel" type="text" maxlength="60" placeholder="e.g. Civic" /></label>
-            </div>
-            <div class="ai-actions"><button class="dark-btn" id="analyzeAi" disabled>Analyze snapshot</button><span id="aiSnapshotHint">Connect and scan codes first.</span></div>
-            <div class="ai-result" id="aiResult" aria-live="polite" hidden><strong id="aiResultHeading">Suggested next steps</strong><pre id="aiResultText"></pre><p id="aiResultCaution">Verify all procedures and specifications against your vehicle’s service information. Never rely solely on AI info.</p></div>
-          </section>
         </section>
       </main>
     </div>
