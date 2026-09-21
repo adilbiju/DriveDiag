@@ -18,7 +18,7 @@ const SENSOR_DEFS = [
   { id: 'throttle', pid: '11', name: 'Throttle position', short: 'Throttle', unit: '%', min: 0, max: 100, range: '0–100%', group: 'Air', available: true, decode: ([a]) => a * 100 / 255 },
   { id: 'oxygen1', pid: '14', name: 'O₂ sensor 1 voltage', short: 'O₂ sensor 1', unit: 'V', min: 0, max: 1.3, range: '0–1.275 V', group: 'Emissions', available: true, decode: ([a]) => a / 200 },
   { id: 'runtime', pid: '1F', name: 'Run time since engine start', short: 'Engine runtime', unit: 's', min: 0, max: 7200, range: '0–18.2 hr', group: 'Vehicle', available: true, decode: ([a, b]) => a * 256 + b },
-  { id: 'distanceMil', pid: '21', name: 'Distance with MIL on', short: 'MIL distance', unit: 'mi', min: 0, max: 500, range: '0–40,722 mi', group: 'Diagnostics', available: true, decode: ([a, b]) => (a * 256 + b) * 0.621371 },
+  { id: 'distanceCel', pid: '21', name: 'Distance with CEL on', short: 'CEL distance', unit: 'mi', min: 0, max: 500, range: '0–40,722 mi', group: 'Diagnostics', available: true, decode: ([a, b]) => (a * 256 + b) * 0.621371 },
   { id: 'fuel', pid: '2F', name: 'Fuel tank level', short: 'Fuel level', unit: '%', min: 0, max: 100, range: '0–100%', group: 'Fuel', available: true, decode: ([a]) => a * 100 / 255 },
   { id: 'barometric', pid: '33', name: 'Barometric pressure', short: 'Barometric pressure', unit: 'kPa', min: 0, max: 130, range: '0–255 kPa', group: 'Air', available: true, decode: ([a]) => a },
   { id: 'catalyst', pid: '3C', name: 'Catalyst temperature — Bank 1', short: 'Catalyst temp', unit: '°F', min: 0, max: 1800, range: '-40–1,691°F', group: 'Emissions', available: true, decode: ([a, b]) => ((a * 256 + b) / 10 - 40) * 9 / 5 + 32 },
@@ -37,7 +37,7 @@ const SENSOR_DEFS = [
 const initialValues = {
   load: 42, coolant: 196, shortFuel: 1.6, longFuel: -2.3, fuelPressure: 358,
   manifold: 46, rpm: 2840, speed: 72, timing: 14.5, intake: 81, maf: 18.7,
-  throttle: 28, oxygen1: .74, runtime: 2844, distanceMil: 126, fuel: 68,
+  throttle: 28, oxygen1: .74, runtime: 2844, distanceCel: 126, fuel: 68,
   barometric: 101, catalyst: 1184, voltage: 14.2, absoluteLoad: 48, ambient: 74,
   relativeThrottle: 24, ethanol: 10, oil: 204, fuelRate: 5.8, torque: 37,
   torqueRef: 320, gear: 5
@@ -353,7 +353,7 @@ function renderCodes() {
   $('#healthCopy').textContent = idle ? 'Connect an OBD adapter to scan the engine control module.' : !state.codeScanComplete ? 'No code scan has completed yet.' : state.mode === 'demo' ? 'Optional demo codes are shown. Connect a vehicle for a real scan.' : state.codes.length ? 'Codes were returned by the connected engine control module.' : 'The engine control module returned no stored or pending codes.';
   $('#protocolValue').textContent = idle ? 'Awaiting connection' : state.mode === 'demo' ? 'Demo' : 'Not read';
   $('#milStatus').textContent = idle ? '—' : 'Not read';
-  $('#milDistance').textContent = idle ? '—' : formatValue(sensorById('distanceMil'), state.values.distanceMil);
+  $('#milDistance').textContent = idle ? '—' : formatValue(sensorById('distanceCel'), state.values.distanceCel);
   $$('.monitor-row em').forEach((element) => { element.textContent = idle ? '—' : 'Not read'; element.classList.remove('ready'); });
   $('#codesList').innerHTML = idle ? '<div class="no-codes panel"><div><i class="icon icon-plug-connected" aria-hidden="true"></i><h3>Connect to diagnose</h3><p>Select an OBD adapter before requesting trouble codes.</p></div></div>' : !state.codeScanComplete ? '<div class="no-codes panel"><div><i class="icon icon-refresh" aria-hidden="true"></i><h3>Scan codes</h3><p>No trouble-code scan has completed yet.</p></div></div>' : state.codes.length ? state.codes.map((item) => `
     <article class="code-card panel">
