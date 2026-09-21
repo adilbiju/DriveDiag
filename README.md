@@ -24,7 +24,9 @@ From the project directory:
 npm start
 ```
 
-Open [http://127.0.0.1:4173](http://127.0.0.1:4173). Press `Ctrl+C` in the terminal to stop the server. To choose another port, run `PORT=4174 npm start` and open that port instead.
+Open [http://127.0.0.1:4173](http://127.0.0.1:4173)
+Press `Ctrl+C` in the terminal to stop the server.
+To choose another port, run `PORT=4174 npm start` and open that port instead.
 
 In the app, select **Connect OBD**, choose your adapter, and allow the browser's Bluetooth request. The default picker filters for common OBD adapter names; use **Adapter not listed? Show all devices** if yours is hidden. Select **Continue with demo data** if you want to test out the interface with synthetic data.
 
@@ -61,6 +63,6 @@ DriveDiag is a diagnostic aid, not a substitute for the vehicle's warnings, a se
 
 ```text
 public/             Browser UI, Bluetooth/OBD logic, safety rules, VIN parser, and assets
-server.js            Local HTTP server, NHTSA lookup, and Gemini proxy
+server.js           Local HTTP server, NHTSA lookup, and Gemini proxy
 package.json        Node.js requirement and start script
 ```
