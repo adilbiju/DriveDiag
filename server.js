@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const publicDir = path.join(__dirname, 'public');
-const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
+const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
 const vinRequests = [];
 const vinPattern = /^[A-HJ-NPR-Z0-9]{17}$/;
 

@@ -9,6 +9,7 @@ DriveDiag is a local web app for viewing OBD-II telemetry from a compatible Blue
 - **Visualize:** chart up to four available signals, with pause and reset controls.
 - **Diagnose:** scan stored and pending diagnostic trouble codes (DTCs).
 - **Vehicle identity:** read the VIN from a responding vehicle and use NHTSA vPIC to display its make and model beside the clock when available.
+- **DTC catalog:** show local titles and short descriptions for 9,533 standardized generic P, B, C, and U codes.
 
 ## Requirements
 
@@ -35,6 +36,7 @@ In the app, select **Connect OBD**, choose your adapter, and allow the browser's
 
 - Live OBD readings and charts are kept in browser's local memory.
 - After the vehicle responds, the browser reads its VIN and sends it to the local server, which requests year, make, and model from the **NHTSA vPIC API**. The VIN is not stored by this project.
+- Generic DTC titles and descriptions are loaded locally from `public/data/dtc-codes.json`. The catalog is derived from the [CC0-licensed OBDex dataset](https://github.com/foerbsnavi/obdex). No code lookup request is sent to an external service.
 
 ## Safety and limitations
 
@@ -52,6 +54,7 @@ DriveDiag is a diagnostic aid, not a substitute for the vehicle's warnings, a se
 
 ```text
 public/             Browser UI, Bluetooth/OBD logic, safety rules, VIN parser, and assets
+public/data/        Local generic DTC title and description catalog
 server.js           Local HTTP server and NHTSA lookup
 package.json        Node.js requirement and start script
 ```

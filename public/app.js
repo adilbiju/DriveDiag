@@ -2,6 +2,7 @@ const $ = (selector, root = document) => root.querySelector(selector);
 const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
 
 const SENSOR_DEFS = [
   { id: 'load', pid: '04', name: 'Calculated engine load', short: 'Engine load', unit: '%', min: 0, max: 100, range: '0–100%', group: 'Engine', available: true, decode: ([a]) => a * 100 / 255 },
@@ -46,8 +47,8 @@ const initialValues = {
 const demoSupport = Object.fromEntries(SENSOR_DEFS.map((sensor) => [sensor.id, sensor.available]));
 const emptyValues = Object.fromEntries(SENSOR_DEFS.map((sensor) => [sensor.id, Number.NaN]));
 const demoCodes = [
-  { code: 'P0420', status: 'Stored', title: 'Catalyst system efficiency below threshold', detail: 'Bank 1 catalyst performance is outside the expected range.', domain: 'Emissions' },
-  { code: 'P0171', status: 'Pending', title: 'System too lean', detail: 'Bank 1 fuel trim indicates more air than expected.', domain: 'Fuel & air' }
+  { code: 'P0420', status: 'Stored' },
+  { code: 'P0171', status: 'Pending' }
 ];
 SENSOR_DEFS.forEach((sensor) => { sensor.available = null; });
 
@@ -75,6 +76,14 @@ const state = {
 let toastTimer;
 let demoTimer;
 let chartFrame;
+let dtcCodes = {};
+const dtcCatalogReady = fetch('data/dtc-codes.json?v=1')
+  .then((response) => {
+    if (!response.ok) throw new Error(`DTC catalog request failed (${response.status})`);
+    return response.json();
+  })
+  .then((catalog) => { dtcCodes = catalog.codes || {}; })
+  .catch((error) => console.warn('Could not load the local DTC catalog.', error));
 
 function sensorById(id) { return SENSOR_DEFS.find((sensor) => sensor.id === id); }
 function showToast(message, persistent=false) {
@@ -331,19 +340,17 @@ function drawChart() {
   });
 }
 
-const CODE_DETAILS = {
-  P0101: ['Mass air flow sensor range/performance', 'The measured airflow is outside the expected operating range.', 'Air intake'],
-  P0113: ['Intake air temperature circuit high', 'The intake temperature signal voltage is higher than expected.', 'Air intake'],
-  P0133: ['O₂ sensor circuit slow response', 'Bank 1 sensor 1 is responding more slowly than expected.', 'Emissions'],
-  P0171: ['System too lean', 'Bank 1 fuel trim indicates more air than expected.', 'Fuel & air'],
-  P0300: ['Random or multiple cylinder misfire', 'Misfires have been detected across more than one cylinder.', 'Ignition'],
-  P0420: ['Catalyst system efficiency below threshold', 'Bank 1 catalyst performance is outside the expected range.', 'Emissions'],
-  P0442: ['Evaporative emission system small leak', 'A small leak was detected in the sealed fuel vapor system.', 'Emissions']
-};
+const DTC_DOMAINS = { P: 'Powertrain', B: 'Body', C: 'Chassis', U: 'Network' };
 
 function enrichCode(code, status = 'Stored') {
-  const detail = CODE_DETAILS[code] || ['Diagnostic trouble code reported', 'Refer to the vehicle service information for manufacturer-specific guidance.', code[0] === 'P' ? 'Powertrain' : 'Vehicle'];
-  return { code, status, title: detail[0], detail: detail[1], domain: detail[2] };
+  const detail = dtcCodes[code];
+  return {
+    code,
+    status,
+    title: detail?.title || 'Diagnostic trouble code reported',
+    detail: detail?.description || 'Description is unavailable. Refer to the vehicle service information for manufacturer-specific guidance.',
+    domain: DTC_DOMAINS[code[0]] || 'Vehicle'
+  };
 }
 
 function renderCodes() {
@@ -357,9 +364,9 @@ function renderCodes() {
   $$('.monitor-row em').forEach((element) => { element.textContent = idle ? '—' : 'Not read'; element.classList.remove('ready'); });
   $('#codesList').innerHTML = idle ? '<div class="no-codes panel"><div><i class="icon icon-plug-connected" aria-hidden="true"></i><h3>Connect to diagnose</h3><p>Select an OBD adapter before requesting trouble codes.</p></div></div>' : !state.codeScanComplete ? '<div class="no-codes panel"><div><i class="icon icon-refresh" aria-hidden="true"></i><h3>Scan codes</h3><p>No trouble-code scan has completed yet.</p></div></div>' : state.codes.length ? state.codes.map((item) => `
     <article class="code-card panel">
-      <div class="code-id"><strong>${item.code}</strong><span>${item.status.toUpperCase()}</span></div>
-      <div class="code-copy"><strong>${item.title}</strong><p>${item.detail}</p></div>
-      <div class="code-domain"><i class="icon icon-activity-heartbeat" aria-hidden="true"></i>${item.domain}</div>
+      <div class="code-id"><strong>${escapeHtml(item.code)}</strong><span>${escapeHtml(item.status.toUpperCase())}</span></div>
+      <div class="code-copy"><strong>${escapeHtml(item.title)}</strong><p>${escapeHtml(item.detail)}</p></div>
+      <div class="code-domain"><i class="icon icon-activity-heartbeat" aria-hidden="true"></i>${escapeHtml(item.domain)}</div>
     </article>`).join('') : '<div class="no-codes panel"><div><i class="icon icon-circle-check" aria-hidden="true"></i><h3>No codes found</h3><p>The connected ECU reported no stored or pending trouble codes.</p></div></div>';
   renderSafety();
 }
@@ -821,6 +828,7 @@ async function scanCodes() {
   state.suspendPolling = true;
   try {
     while (state.pendingCommand) await sleep(40);
+    await dtcCatalogReady;
     const stored = await sendCommand('03', 4500);
     const pending = await sendCommand('07', 4500);
     state.codes = [...parseDtcResponse(stored, 0x43, 'Stored'), ...parseDtcResponse(pending, 0x47, 'Pending')];
@@ -847,12 +855,13 @@ async function clearCodes() {
   showToast(state.mode === 'vehicle' ? 'Clear command sent. Re-scan to confirm.' : 'Demo codes cleared.');
 }
 
-function setDemoMode() {
+async function setDemoMode() {
   if (state.device?.gatt?.connected) state.device.gatt.disconnect();
+  await dtcCatalogReady;
   state.mode = 'demo';
   state.values = { ...initialValues };
   state.sensorUpdatedAt = Object.fromEntries(Object.keys(initialValues).map((id) => [id, Date.now()]));
-  state.codes = demoCodes.map((code) => ({ ...code }));
+  state.codes = demoCodes.map(({ code, status }) => enrichCode(code, status));
   state.codeScanComplete = true;
   resetVehicleIdentity();
   state.selected = ['rpm', 'speed', 'coolant'];
