@@ -7,7 +7,7 @@ function resolveGeminiModel(configured = process.env.GEMINI_MODEL) {
   return (configured || 'gemini-3.5-flash-lite').trim().replace(/^models\//, '');
 }
 const model = resolveGeminiModel();
-const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
+const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
 const recentRequests = [];
 const vinRequests = [];
 const vinPattern = /^[A-HJ-NPR-Z0-9]{17}$/;

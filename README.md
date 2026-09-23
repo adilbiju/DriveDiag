@@ -10,6 +10,7 @@ Checkout a non-AI version of it [here](https://adilbiju.github.io/DriveDiag/).
 - **Sensors:** discover supported OBD-II PIDs, inspect available readings, and filter or search the sensor list.
 - **Visualize:** chart up to four available signals, with pause and reset controls.
 - **Diagnose:** scan stored and pending diagnostic trouble codes (DTCs), then optionally send a snapshot to Gemini for possible causes and next checks.
+- **DTC catalog:** show local titles and short descriptions for 9,533 standardized generic P, B, C, and U codes.
 
 ## Requirements
 
@@ -47,6 +48,7 @@ AI analysis is user-initiated after a code scan. It can be wrong and has not bee
 - Live OBD readings and charts are kept in browser's local memory.
 - After the vehicle responds, the browser reads its VIN and requests year, make, and model from the **NHTSA vPIC API**. The VIN is not included in the Gemini snapshot.
 - Clicking **Analyze snapshot** sends DTCs, recent available sensor values, and year/make/model to the local server and then to the **Gemini API**. The Gemini key remains on the server.
+- Generic DTC titles and descriptions are loaded locally from `public/data/dtc-codes.json`. The catalog is derived from the [CC0-licensed OBDex dataset](https://github.com/foerbsnavi/obdex). No code lookup request is sent to an external service.
 
 ## Safety and limitations
 
@@ -65,6 +67,7 @@ DriveDiag is a diagnostic aid, not a substitute for the vehicle's warnings, a se
 
 ```text
 public/             Browser UI, Bluetooth/OBD logic, safety rules, VIN parser, and assets
+public/data/        Local generic DTC title and description catalog
 server.js           Local HTTP server, NHTSA lookup, and Gemini proxy
 package.json        Node.js requirement and start script
 ```
