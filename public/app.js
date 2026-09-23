@@ -77,12 +77,12 @@ let demoTimer;
 let chartFrame;
 
 function sensorById(id) { return SENSOR_DEFS.find((sensor) => sensor.id === id); }
-function showToast(message) {
+function showToast(message, persistent = false) {
   const toast = $('#toast');
   toast.textContent = message;
   toast.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toast.classList.remove('show'), 3000);
+  if (!persistent) toastTimer = setTimeout(() => toast.classList.remove('show'), 3000);
 }
 
 function currentSampleRate(now = Date.now()) {
@@ -526,7 +526,7 @@ function setConnectionUI(label, connected) {
 
 async function connectBluetooth(showAll = false) {
   if (!navigator.bluetooth) {
-    showToast('Web Bluetooth is not available in this browser. Try Chrome or Edge over HTTPS.');
+    showToast('Web Bluetooth is not available in this browser. Try Chrome or Edge over HTTPS.', true);
     return;
   }
   const filteredButton = $('#pairDevice');
