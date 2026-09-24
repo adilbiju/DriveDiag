@@ -172,7 +172,7 @@
           <div class="diagnostic-layout">
             <div class="codes-list" id="codesList"></div>
             <aside class="diagnostic-side panel">
-              <div class="side-block"><span>MONITOR STATUS</span><div class="monitor-row"><strong>Misfire</strong><em class="ready">Ready</em></div><div class="monitor-row"><strong>Fuel system</strong><em class="ready">Ready</em></div><div class="monitor-row"><strong>Catalyst</strong><em>Incomplete</em></div><div class="monitor-row"><strong>O₂ sensor</strong><em class="ready">Ready</em></div></div>
+              <div class="side-block"><span>MONITOR STATUS</span><div class="monitor-row"><strong>Misfire</strong><em data-monitor="misfire">—</em></div><div class="monitor-row"><strong>Fuel system</strong><em data-monitor="fuel">—</em></div><div class="monitor-row"><strong>Catalyst</strong><em data-monitor="catalyst">—</em></div><div class="monitor-row"><strong>O₂ sensor</strong><em data-monitor="oxygen">—</em></div></div>
               <div class="side-block"><span>VEHICLE INFO</span><div class="info-row"><small>Protocol</small><strong id="protocolValue">Awaiting connection</strong></div><div class="info-row"><small>CEL status</small><strong id="milStatus">—</strong></div><div class="info-row"><small>Distance with CEL</small><strong id="milDistance">—</strong></div></div>
               <button class="danger-btn" id="clearCodes"><i class="icon icon-trash" aria-hidden="true"></i>Clear trouble codes</button>
               <p class="clear-note">Clearing codes also resets readiness monitors. Repair the underlying fault first.</p>
@@ -209,6 +209,6 @@
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script src="safety.js?v=1"></script>
     <script src="vin.js?v=1"></script>
-    <script src="app.js?v=18"></script>
+    <script src="app.js?v=20"></script>
   </body>
 </html>
