@@ -59,6 +59,7 @@ const SENSOR_ICONS = {
   Diagnostics: 'alert-triangle', Electrical: 'battery-automotive', Transmission: 'manual-gearbox'
 };
 const FAST_SENSOR_IDS = ['rpm', 'speed', 'load', 'throttle'];
+const CHART_WINDOW_MS = 60000;
 const POLL_INTERVALS = {
   rpm: 120, speed: 120, load: 250, throttle: 250, maf: 500, timing: 500,
   shortFuel: 900, longFuel: 900, coolant: 2500, intake: 2500, voltage: 5000
@@ -69,7 +70,8 @@ const state = {
   sensorLastPolled: {}, fastBundleIds: [], lastFastPoll: 0, fastTimingConfigured: false, sampleTimestamps: [],
   values: { ...emptyValues }, sensorUpdatedAt: {}, selected: [], history: {}, paused: false,
   sensorFilter: 'available', sensorSearch: '', chartSearch: '',
-  tripMiles: 0, speedSamples: [], codes: [], codeScanComplete: false,
+  tripMiles: 0, speedSamples: [], lastSpeedSample: null, codes: [], codeScanComplete: false,
+  diagnostics: { protocol: '', mil: null, dtcCount: null, monitors: {} },
   vinRevision: 0, vehicleIdentityState: 'idle', vehicle: { year: null, make: '', model: '' }, connectionFallbackLabel: 'Not connected'
 };
 
@@ -164,6 +166,7 @@ function updateLiveValues() {
     element.textContent = formatValue(sensor, state.values[sensor.id]);
   });
   updateDashboard();
+  renderDiagnosticSidebar();
   renderSafety();
 }
 
@@ -285,12 +288,12 @@ function renderLegend() {
   }).join('');
 }
 
-function pushHistory() {
+function pushHistory(now = Date.now()) {
   if (state.paused) return;
   SENSOR_DEFS.forEach((sensor) => {
     if (!state.history[sensor.id]) state.history[sensor.id] = [];
-    state.history[sensor.id].push(state.values[sensor.id]);
-    if (state.history[sensor.id].length > 120) state.history[sensor.id].shift();
+    state.history[sensor.id].push({ time: now, value: state.values[sensor.id] });
+    state.history[sensor.id] = state.history[sensor.id].filter((point) => point.time >= now - CHART_WINDOW_MS);
   });
   renderLegend();
   drawChart();
@@ -316,22 +319,26 @@ function drawChart() {
       const y = Math.round((height / 4) * i) + .5;
       ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(width, y); ctx.stroke();
     }
+    const now = Date.now();
+    const windowStart = now - CHART_WINDOW_MS;
     for (let i = 0; i <= 6; i += 1) {
       const x = Math.round((width / 6) * i) + .5;
       ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke();
       ctx.fillStyle = '#999c93'; ctx.font = '10px DM Sans'; ctx.textAlign = i === 0 ? 'left' : i === 6 ? 'right' : 'center';
-      ctx.fillText(`${60 - i * 10}s`, x, rect.height - 2);
+      ctx.fillText(`${Math.round((CHART_WINDOW_MS / 1000) * (1 - i / 6))}s`, x, rect.height - 2);
     }
     state.selected.forEach((id, seriesIndex) => {
       const sensor = sensorById(id);
-      const values = state.history[id] || [];
-      if (values.length < 2) return;
+      const points = (state.history[id] || []).filter((point) => point.time >= windowStart);
+      if (points.length < 2) return;
       ctx.beginPath();
-      values.forEach((value, index) => {
-        const x = (index / 119) * width;
+      let drawing = false;
+      points.forEach(({ time, value }) => {
+        if (!Number.isFinite(value)) { drawing = false; return; }
+        const x = clamp((time - windowStart) / CHART_WINDOW_MS, 0, 1) * width;
         const normalized = clamp((value - sensor.min) / (sensor.max - sensor.min), 0, 1);
         const y = height - normalized * height;
-        if (index === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        if (!drawing) { ctx.moveTo(x, y); drawing = true; } else ctx.lineTo(x, y);
       });
       ctx.strokeStyle = SERIES_COLORS[seriesIndex];
       ctx.lineWidth = seriesIndex === 0 ? 2.5 : 2;
@@ -353,15 +360,25 @@ function enrichCode(code, status = 'Stored') {
   };
 }
 
+function renderDiagnosticSidebar() {
+  const idle = state.mode === 'idle';
+  const demo = state.mode === 'demo';
+  $('#protocolValue').textContent = idle ? 'Awaiting connection' : demo ? 'Demo' : state.diagnostics.protocol || 'Not available';
+  $('#milStatus').textContent = idle ? '—' : state.diagnostics.mil === null ? 'Not available' : state.diagnostics.mil ? 'On' : 'Off';
+  $('#milDistance').textContent = idle ? '—' : formatValue(sensorById('distanceCel'), state.values.distanceCel);
+  $$('[data-monitor]').forEach((element) => {
+    const status = idle ? '—' : state.diagnostics.monitors[element.dataset.monitor] || 'Not available';
+    element.textContent = status;
+    element.classList.toggle('ready', status === 'Ready');
+  });
+}
+
 function renderCodes() {
   $('#issueCount').textContent = String(state.codes.length);
   const idle = state.mode === 'idle';
   $('#healthTitle').textContent = idle ? 'Not connected' : !state.codeScanComplete ? 'Scan needed' : state.codes.length ? `${state.codes.length} issue${state.codes.length === 1 ? '' : 's'} need attention` : 'No trouble codes reported';
   $('#healthCopy').textContent = idle ? 'Connect an OBD adapter to scan the engine control module.' : !state.codeScanComplete ? 'No code scan has completed yet.' : state.mode === 'demo' ? 'Optional demo codes are shown. Connect a vehicle for a real scan.' : state.codes.length ? 'Codes were returned by the connected engine control module.' : 'The engine control module returned no stored or pending codes.';
-  $('#protocolValue').textContent = idle ? 'Awaiting connection' : state.mode === 'demo' ? 'Demo' : 'Not read';
-  $('#milStatus').textContent = idle ? '—' : 'Not read';
-  $('#milDistance').textContent = idle ? '—' : formatValue(sensorById('distanceCel'), state.values.distanceCel);
-  $$('.monitor-row em').forEach((element) => { element.textContent = idle ? '—' : 'Not read'; element.classList.remove('ready'); });
+  renderDiagnosticSidebar();
   $('#codesList').innerHTML = idle ? '<div class="no-codes panel"><div><i class="icon icon-plug-connected" aria-hidden="true"></i><h3>Connect to diagnose</h3><p>Select an OBD adapter before requesting trouble codes.</p></div></div>' : !state.codeScanComplete ? '<div class="no-codes panel"><div><i class="icon icon-refresh" aria-hidden="true"></i><h3>Scan codes</h3><p>No trouble-code scan has completed yet.</p></div></div>' : state.codes.length ? state.codes.map((item) => `
     <article class="code-card panel">
       <div class="code-id"><strong>${escapeHtml(item.code)}</strong><span>${escapeHtml(item.status.toUpperCase())}</span></div>
@@ -385,6 +402,17 @@ function navigate(view, updateHash = true) {
   if (view === 'visualize') setTimeout(drawChart, 20);
 }
 
+function recordSpeed(value, now = Date.now()) {
+  const previous = state.lastSpeedSample;
+  const elapsed = previous ? now - previous.time : 0;
+  if (previous && elapsed > 0 && elapsed <= 5000) {
+    state.tripMiles += ((previous.value + value) / 2) * (elapsed / 3600000);
+  }
+  state.lastSpeedSample = { value, time: now };
+  state.speedSamples.push(value);
+  if (state.speedSamples.length > 120) state.speedSamples.shift();
+}
+
 function tickDemo() {
   if (state.mode !== 'demo') return;
   const v = state.values;
@@ -402,12 +430,11 @@ function tickDemo() {
   v.voltage = clamp(14.15 + (Math.random() - .5) * .12, 13.8, 14.5);
   v.fuelRate = clamp(1.1 + v.load * .11, .6, 28);
   v.torque = clamp(v.load - 8, -10, 100);
-  Object.keys(v).forEach((id) => { state.sensorUpdatedAt[id] = Date.now(); });
-  state.tripMiles += v.speed / 4800;
-  state.speedSamples.push(v.speed);
-  if (state.speedSamples.length > 120) state.speedSamples.shift();
+  const now = Date.now();
+  Object.keys(v).forEach((id) => { state.sensorUpdatedAt[id] = now; });
+  recordSpeed(v.speed, now);
   updateLiveValues();
-  pushHistory();
+  pushHistory(now);
 }
 
 const UUIDS = {
@@ -496,6 +523,8 @@ async function connectBluetooth(showAll = false) {
     resetVehicleIdentity();
     state.tripMiles = 0;
     state.speedSamples = [];
+    state.lastSpeedSample = null;
+    state.diagnostics = { protocol: '', mil: null, dtcCount: null, monitors: {} };
     state.sensorLastPolled = {};
     state.fastBundleIds = [];
     state.lastFastPoll = 0;
@@ -593,15 +622,41 @@ async function initializeAdapter() {
   setConnectionUI(state.device?.name || 'Vehicle connected', true);
 }
 
+const ADAPTER_ERROR_PATTERN = /CAN\s*ERROR|BUS\s*ERROR|DATA\s*ERROR|FB\s*ERROR|RX\s*ERROR|BUFFER\s*FULL|BUS\s*BUSY|NO\s*RESPONSE|UNABLE\s+TO\s+CONNECT|STOPPED|ACT\s+ALERT|LP\s+ALERT|LV\s+RESET|LOW\s*POWER|^\s*(?:ERROR|\?)\s*$/im;
+
+function assertNoAdapterError(response) {
+  const match = String(response).match(ADAPTER_ERROR_PATTERN);
+  if (match) throw new Error(`Adapter reported ${match[0].trim()}.`);
+}
+
+function lineBytes(line) {
+  if (/NO\s*DATA|SEARCHING|BUS\s*INIT/i.test(line)) return null;
+  const compact = line.replace(/[^A-F0-9]/gi, '');
+  if (compact.length < 2 || compact.length % 2) return null;
+  const bytes = compact.match(/.{2}/g)?.map((pair) => parseInt(pair, 16));
+  return bytes?.every(Number.isFinite) ? bytes : null;
+}
+
 function responseBytes(response) {
   const output = [];
-  response.toUpperCase().split(/[\r\n]+/).forEach((line) => {
-    const compact = line.replace(/SEARCHING\.{0,3}|BUS INIT[^A-F0-9]*/g, '').replace(/[^A-F0-9]/g, '');
-    if (compact.length >= 4 && compact.length % 2 === 0 && !/NODATA|STOPPED|ERROR/.test(line.replace(/\s/g, ''))) {
-      const bytes = compact.match(/.{2}/g)?.map((pair) => parseInt(pair, 16));
-      if (bytes?.every(Number.isFinite)) output.push(bytes);
+  let numbered = [];
+  const flushNumbered = () => {
+    if (numbered.length) output.push(numbered.flat());
+    numbered = [];
+  };
+  String(response).split(/[\r\n]+/).forEach((rawLine) => {
+    const match = rawLine.match(/^\s*([0-9A-F])\s*:\s*(.*)$/i);
+    if (match) {
+      if (parseInt(match[1], 16) === 0) flushNumbered();
+      const bytes = lineBytes(match[2]);
+      if (bytes) numbered.push(bytes);
+      return;
     }
+    flushNumbered();
+    const bytes = lineBytes(rawLine);
+    if (bytes) output.push(bytes);
   });
+  flushNumbered();
   return output;
 }
 
@@ -612,6 +667,57 @@ function extractMode01(response, pid) {
     if (index >= 0) return bytes.slice(index + 2);
   }
   return null;
+}
+
+function monitorStatus(available, incomplete) {
+  if (!available) return 'Unsupported';
+  return incomplete ? 'Incomplete' : 'Ready';
+}
+
+function decodeReadiness(response) {
+  const data = extractMode01(response, '01');
+  if (!data || data.length < 4) throw new Error('Vehicle did not return readiness data.');
+  const [a, b, c, d] = data;
+  const bit = (value, index) => Boolean(value & (1 << index));
+  return {
+    mil: bit(a, 7),
+    dtcCount: a & 0x7f,
+    monitors: {
+      misfire: monitorStatus(bit(b, 0), bit(b, 4)),
+      fuel: monitorStatus(bit(b, 1), bit(b, 5)),
+      catalyst: monitorStatus(bit(c, 0), bit(d, 0)),
+      oxygen: monitorStatus(bit(c, 5), bit(d, 5))
+    }
+  };
+}
+
+function parseProtocol(response) {
+  return String(response).split(/[\r\n]+/).map((line) => line.replace(/>/g, '').trim())
+    .find((line) => line && !/^ATDPN?$/i.test(line) && !ADAPTER_ERROR_PATTERN.test(line)) || '';
+}
+
+async function refreshDiagnosticMetadata() {
+  try {
+    let response;
+    try {
+      response = await sendCommand('ATDP', 2500);
+      assertNoAdapterError(response);
+    } catch {
+      response = await sendCommand('ATDPN', 2500);
+      assertNoAdapterError(response);
+    }
+    state.diagnostics.protocol = parseProtocol(response);
+  } catch { state.diagnostics.protocol = ''; }
+  try {
+    const response = await sendCommand('0101', 3000);
+    assertNoAdapterError(response);
+    Object.assign(state.diagnostics, decodeReadiness(response));
+  } catch {
+    state.diagnostics.mil = null;
+    state.diagnostics.dtcCount = null;
+    state.diagnostics.monitors = {};
+  }
+  renderDiagnosticSidebar();
 }
 
 async function refreshAdapterVoltage() {
@@ -642,15 +748,13 @@ async function configureFastTiming() {
 
 function applySensorValue(sensor, value) {
   if (!Number.isFinite(value)) return false;
+  const now = Date.now();
   state.values[sensor.id] = value;
-  state.sensorUpdatedAt[sensor.id] = Date.now();
-  state.sampleTimestamps.push(state.sensorUpdatedAt[sensor.id]);
+  state.sensorUpdatedAt[sensor.id] = now;
+  state.sampleTimestamps.push(now);
   const rateElement = $('#sensorRate');
   if (rateElement) rateElement.textContent = currentSampleRate().toFixed(1);
-  if (sensor.id === 'speed') {
-    state.speedSamples.push(value);
-    if (state.speedSamples.length > 120) state.speedSamples.shift();
-  }
+  if (sensor.id === 'speed') recordSpeed(value, now);
   return true;
 }
 
@@ -777,6 +881,8 @@ function resetDisconnectedState(showDisconnectedToast = false) {
   resetVehicleIdentity();
   state.tripMiles = 0;
   state.speedSamples = [];
+  state.lastSpeedSample = null;
+  state.diagnostics = { protocol: '', mil: null, dtcCount: null, monitors: {} };
   state.sensorLastPolled = {};
   state.fastBundleIds = [];
   state.lastFastPoll = 0;
@@ -801,10 +907,17 @@ function disconnectDevice() {
 
 function parseDtcResponse(response, replyMode, status) {
   const codes = [];
+  let foundReply = false;
+  const protocol = state.diagnostics.protocol;
+  const knownNonCan = /J1850|ISO\s*9141|ISO\s*14230|KWP/i.test(protocol) || /^A?[1-5]$/i.test(protocol);
+  const countPrefixed = !knownNonCan || /CAN|ISO\s*15765/i.test(protocol) || /^A?[6-9]$/i.test(protocol) || /^\s*[0-9A-F]\s*:/im.test(response);
   responseBytes(response).forEach((bytes) => {
     const start = bytes.indexOf(replyMode);
     if (start < 0) return;
-    for (let i = start + 1; i + 1 < bytes.length; i += 2) {
+    foundReply = true;
+    const expected = countPrefixed ? bytes[start + 1] ?? 0 : Number.POSITIVE_INFINITY;
+    const firstCodeByte = start + (countPrefixed ? 2 : 1);
+    for (let i = firstCodeByte, decoded = 0; i + 1 < bytes.length && decoded < expected; i += 2, decoded += 1) {
       const first = bytes[i], second = bytes[i + 1];
       if (first === 0 && second === 0) break;
       const family = ['P', 'C', 'B', 'U'][first >> 6];
@@ -812,7 +925,15 @@ function parseDtcResponse(response, replyMode, status) {
       codes.push(enrichCode(code, status));
     }
   });
+  if (!foundReply && !/NO\s*DATA/i.test(response)) throw new Error('Vehicle returned an unexpected trouble-code response.');
   return codes;
+}
+
+function assertStoredDtcResponse(response) {
+  assertNoAdapterError(response);
+  if (/NO\s*DATA/i.test(response) && (state.diagnostics.dtcCount !== 0 || state.diagnostics.mil !== false)) {
+    throw new Error('Stored-code response conflicts with vehicle readiness data.');
+  }
 }
 
 async function scanCodes() {
@@ -829,8 +950,11 @@ async function scanCodes() {
   try {
     while (state.pendingCommand) await sleep(40);
     await dtcCatalogReady;
+    await refreshDiagnosticMetadata();
     const stored = await sendCommand('03', 4500);
+    assertStoredDtcResponse(stored);
     const pending = await sendCommand('07', 4500);
+    assertNoAdapterError(pending);
     state.codes = [...parseDtcResponse(stored, 0x43, 'Stored'), ...parseDtcResponse(pending, 0x47, 'Pending')];
     state.codeScanComplete = true;
     renderCodes();
@@ -867,6 +991,8 @@ async function setDemoMode() {
   state.selected = ['rpm', 'speed', 'coolant'];
   state.tripMiles = 18.6;
   state.speedSamples = [48];
+  state.lastSpeedSample = { value: state.values.speed, time: Date.now() };
+  state.diagnostics = { protocol: 'Demo', mil: true, dtcCount: state.codes.length, monitors: { misfire: 'Ready', fuel: 'Ready', catalyst: 'Incomplete', oxygen: 'Ready' } };
   SENSOR_DEFS.forEach((sensor) => { sensor.available = demoSupport[sensor.id]; });
   $('#adapterName').textContent = 'Not connected';
   setConnectionUI('Demo stream', false);
