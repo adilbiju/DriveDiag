@@ -1,0 +1,64 @@
+name: Sync non-AI branch
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: sync-non-ai-version
+  cancel-in-progress: true
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    env:
+      NON_AI_WORKTREE: ${{ runner.temp }}/drivediag-non-ai
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Check out the generated branch
+        run: |
+          git fetch origin non-ai-version
+          git worktree add -B non-ai-version "$NON_AI_WORKTREE" origin/non-ai-version
+
+      - name: Generate the non-AI tree
+        run: node scripts/sync-non-ai.mjs "$NON_AI_WORKTREE"
+
+      - name: Set up GitHub Pages
+        uses: actions/configure-pages@v6
+
+      - name: Upload the generated static site
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: ${{ env.NON_AI_WORKTREE }}/public
+
+      - name: Commit and push shared changes
+        run: |
+          git -C "$NON_AI_WORKTREE" config user.name "github-actions[bot]"
+          git -C "$NON_AI_WORKTREE" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git -C "$NON_AI_WORKTREE" add -A
+          if git -C "$NON_AI_WORKTREE" diff --cached --quiet; then
+            echo "non-ai-version is already up to date."
+            exit 0
+          fi
+          git -C "$NON_AI_WORKTREE" commit -m "Sync shared changes from main ($GITHUB_SHA)"
+          git -C "$NON_AI_WORKTREE" push origin HEAD:non-ai-version
+
+  deploy:
+    needs: sync
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

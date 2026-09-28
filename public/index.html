@@ -8,6 +8,9 @@
     <link rel="icon" type="image/svg+xml" sizes="any" href="assets/favicon.svg?v=tabler-1" />
     <title>DriveDiag — Vehicle telemetry</title>
     <link rel="stylesheet" href="styles.css?v=15" />
+    <!-- AI_ONLY_START -->
+    <link rel="stylesheet" href="ai.css?v=1" />
+    <!-- AI_ONLY_END -->
   </head>
   <body>
     <div class="app-shell">
@@ -178,6 +181,7 @@
               <p class="clear-note">Clearing codes also resets readiness monitors. Repair the underlying fault first.</p>
             </aside>
           </div>
+          <!-- AI_ONLY_START -->
           <section class="ai-panel panel" aria-labelledby="ai-heading">
             <div class="ai-head"><div><span class="kicker">OPTIONAL · AI-ASSISTED</span><h3 id="ai-heading">Troubleshoot with AI</h3><p>Send the current DTCs and available sensor snapshot to Gemini for possible causes and next checks. AI suggestions are not a diagnosis.</p></div><span class="ai-provider">GEMINI</span></div>
             <div class="vehicle-identity" role="status">
@@ -191,6 +195,7 @@
             <div class="ai-actions"><button class="dark-btn" id="analyzeAi" disabled>Analyze snapshot</button><span id="aiSnapshotHint">Connect and scan codes first.</span></div>
             <div class="ai-result" id="aiResult" aria-live="polite" hidden><strong id="aiResultHeading">Suggested next steps</strong><pre id="aiResultText"></pre><p id="aiResultCaution">Verify all procedures and specifications against your vehicle’s service information. Never rely solely on AI info.</p></div>
           </section>
+          <!-- AI_ONLY_END -->
         </section>
       </main>
     </div>
@@ -209,6 +214,9 @@
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script src="safety.js?v=1"></script>
     <script src="vin.js?v=1"></script>
-    <script src="app.js?v=20"></script>
+    <script src="app.js?v=21"></script>
+    <!-- AI_ONLY_START -->
+    <script src="ai.js?v=1"></script>
+    <!-- AI_ONLY_END -->
   </body>
 </html>

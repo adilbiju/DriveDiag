@@ -237,27 +237,6 @@ svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round
 .monitor-row, .info-row { display: flex; align-items: center; justify-content: space-between; min-height: 31px; font-size: .72rem; }.monitor-row strong, .info-row strong { font-weight: 600; }.monitor-row em { color: #9b6b23; font-style: normal; font-size: .66rem; }.monitor-row em.ready { color: #648e20; }.info-row small { color: var(--muted); }.info-row strong { max-width: 165px; text-align: right; }
 .danger-btn { width: 100%; margin-top: 22px; border: 1px solid #e4b2a9; background: #fff5f2; color: #b33f2e; }.danger-btn:hover { background: #ffe9e4; }
 .clear-note { color: var(--muted); margin: 9px 3px 0; font-size: .64rem; line-height: 1.4; text-align: center; }
-.ai-panel { margin-top: 16px; padding: 24px; box-shadow: none; }
-.ai-head { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; }
-.ai-head .kicker { color: var(--amber-dark); font-size: .65rem; font-weight: 800; letter-spacing: .15em; }
-.ai-head h3 { margin: 4px 0 5px; font-family: "Barlow Condensed", sans-serif; text-transform: uppercase; font-size: 1.7rem; }
-.ai-head p { margin: 0; max-width: 680px; color: var(--muted); font-size: .81rem; line-height: 1.5; }
-.ai-provider { padding: 6px 9px; border: 1px solid var(--line); border-radius: 4px; color: var(--muted); font-size: .65rem; font-weight: 800; letter-spacing: .1em; }
-.vehicle-identity { margin-top: 20px; padding: 16px; border: 1px solid var(--line); border-radius: 7px; background: #fafaf7; }
-.vehicle-identity span { display: block; margin-bottom: 5px; color: var(--muted); font-size: .67rem; font-weight: 800; letter-spacing: .08em; }
-.vehicle-identity strong { display: block; font-size: .91rem; }
-.vehicle-identity p { margin: 5px 0 0; color: var(--muted); font-size: .7rem; line-height: 1.4; }
-.vehicle-fields { display: flex; flex-wrap: wrap; gap: 10px; margin: 20px 0 14px; }
-.vehicle-fields label { min-width: 120px; flex: 1; color: var(--muted); font-size: .68rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
-.vehicle-fields input { display: block; width: 100%; height: 40px; margin-top: 6px; padding: 0 10px; border: 1px solid var(--line); border-radius: 5px; color: var(--ink); background: #fafaf7; font-size: .81rem; font-weight: 500; letter-spacing: 0; text-transform: none; }
-.ai-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-top: 16px; }
-.ai-actions span { color: var(--muted); font-size: .72rem; }
-.ai-result { margin-top: 20px; padding: 18px; border: 1px solid var(--line); border-radius: 6px; background: #fafaf7; }
-.ai-result.error { border-color: #ceaa72; background: #fff8eb; }
-.ai-result > strong { display: block; font-size: .78rem; text-transform: uppercase; letter-spacing: .1em; }
-.ai-result pre { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; font-size: .81rem; line-height: 1.6; }
-.ai-result p { color: var(--muted); font-size: .69rem; }
-
 .connect-dialog { width: min(92vw, 480px); border: 0; border-radius: 12px; padding: 0; background: transparent; color: var(--ink); box-shadow: 0 25px 80px rgba(0,0,0,.25); }
 .connect-dialog::backdrop { background: rgba(12,14,12,.7); backdrop-filter: blur(5px); }
 .dialog-card { position: relative; margin: 0; padding: 34px; background: #fff; border-top: 5px solid var(--amber); border-radius: 10px; }
