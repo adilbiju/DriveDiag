@@ -3,6 +3,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const publicDir = path.join(__dirname, 'public');
+const aiModulePath = path.join(__dirname, 'server-ai.js');
+const ai = fs.existsSync(aiModulePath) ? require(aiModulePath) : null;
 const mime = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.json': 'application/json; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon' };
 const vinRequests = [];
 const vinPattern = /^[A-HJ-NPR-Z0-9]{17}$/;
@@ -67,6 +69,7 @@ function serveStatic(request, response) {
 function createServer() {
   return http.createServer((request, response) => {
     if (!/^(127\.0\.0\.1|localhost)(:\d+)?$/.test(request.headers.host || '')) return sendJson(response, 403, { error: 'Localhost only.' });
+    if (ai && request.method === 'POST' && request.url === '/api/analyze') return void ai.analyze(request, response);
     if (request.method === 'POST' && request.url === '/api/decode-vin') return void decodeVin(request, response);
     if (request.method !== 'GET' && request.method !== 'HEAD') return sendJson(response, 405, { error: 'Method not allowed.' });
     serveStatic(request, response);
@@ -78,4 +81,4 @@ if (require.main === module) {
   createServer().listen(port, '127.0.0.1', () => console.log(`DriveDiag: http://127.0.0.1:${port}`));
 }
 
-module.exports = { createServer, lookupVin };
+module.exports = { createServer, lookupVin, ...(ai || {}) };

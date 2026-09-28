@@ -35,20 +35,24 @@ In the app, select **Connect OBD**, choose your adapter, and allow the browser's
 ## Data handling
 
 - Live OBD readings and charts are kept in browser's local memory.
-- After the vehicle responds, the browser reads its VIN and sends it to the local server, which requests year, make, and model from the **NHTSA vPIC API**. The VIN is not stored by this project.
+- After the vehicle responds, the browser reads its VIN and requests year, make, and model from the **NHTSA vPIC API**.
 - Generic DTC titles and descriptions are loaded locally from `public/data/dtc-codes.json`. The catalog is derived from the [CC0-licensed OBDex dataset](https://github.com/foerbsnavi/obdex). No code lookup request is sent to an external service.
 
 ## Safety and limitations
 
 DriveDiag is a diagnostic aid, not a substitute for the vehicle's warnings, a service manual, or a qualified mechanic. The local coolant, oil-temperature, misfire-code, and fuel-trim alerts use generic screening rules. A stored code may be historical, and missing or stale readings cannot be assessed. Do not operate the app while driving.
 
-
-
 ## Troubleshooting
 
 - **No adapter appears:** check that Bluetooth is enabled, use a Web Bluetooth-capable browser, and try **Show all devices**.
 - **Adapter connects but readings stay empty:** turn the ignition on and confirm the adapter supports BLE. Close other apps that may already be using it, then reconnect.
-- **VIN cannot be decoded:** vehicle readings still work; the connection label falls back to the adapter name.
+- **VIN cannot be decoded:** vehicle data can still be viewed; the connection label falls back to the adapter name.
+
+## Branch synchronization
+
+`non-ai-version` is generated from `main` by `.github/workflows/sync-non-ai.yml`. Shared browser and server files are copied as-is. The generator omits `public/ai.js`, `public/ai.css`, and `server-ai.js`, removes blocks enclosed by `AI_ONLY_START` / `AI_ONLY_END` comments from HTML and Markdown files, and deploys the generated `public/` directory to GitHub Pages.
+
+Do not make shared-code edits directly on `non-ai-version`; the next successful sync replaces them. Its branch-specific GitHub Pages workflow is preserved.
 
 ## Project layout
 

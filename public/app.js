@@ -72,7 +72,8 @@ const state = {
   sensorFilter: 'available', sensorSearch: '', chartSearch: '',
   tripMiles: 0, speedSamples: [], lastSpeedSample: null, codes: [], codeScanComplete: false,
   diagnostics: { protocol: '', mil: null, dtcCount: null, monitors: {} },
-  vinRevision: 0, vehicleIdentityState: 'idle', vehicle: { year: null, make: '', model: '' }, connectionFallbackLabel: 'Not connected'
+  vinRevision: 0, vehicleIdentityState: 'idle', vehicleIdentityMessage: '',
+  vehicle: { year: null, make: '', model: '' }, connectionFallbackLabel: 'Not connected'
 };
 
 let toastTimer;
@@ -88,12 +89,16 @@ const dtcCatalogReady = fetch('data/dtc-codes.json?v=1')
   .catch((error) => console.warn('Could not load the local DTC catalog.', error));
 
 function sensorById(id) { return SENSOR_DEFS.find((sensor) => sensor.id === id); }
-function showToast(message, persistent=false) {
+function showToast(message, persistent = false) {
   const toast = $('#toast');
   toast.textContent = message;
   toast.classList.add('show');
   clearTimeout(toastTimer);
   if (!persistent) toastTimer = setTimeout(() => toast.classList.remove('show'), 3000);
+}
+
+function emitAppChange(type) {
+  window.dispatchEvent(new CustomEvent('drivediag:change', { detail: { type } }));
 }
 
 function currentSampleRate(now = Date.now()) {
@@ -187,17 +192,24 @@ function renderSafety() {
   }));
 }
 
+function renderVehicleIdentity() {
+  updateConnectionLabel();
+  emitAppChange('identity');
+}
+
 function resetVehicleIdentity() {
   state.vinRevision += 1;
   state.vehicleIdentityState = state.mode === 'vehicle' ? 'waiting' : state.mode === 'demo' ? 'demo' : 'idle';
+  state.vehicleIdentityMessage = '';
   state.vehicle = { year: null, make: '', model: '' };
-  updateConnectionLabel();
+  renderVehicleIdentity();
 }
 
 async function identifyVehicleAutomatically() {
   if (state.mode !== 'vehicle' || !['waiting', 'loading'].includes(state.vehicleIdentityState)) return;
   const revision = ++state.vinRevision;
   state.vehicleIdentityState = 'loading';
+  renderVehicleIdentity();
   let vin;
   state.suspendPolling = true;
   try {
@@ -205,8 +217,12 @@ async function identifyVehicleAutomatically() {
     if (state.mode !== 'vehicle' || revision !== state.vinRevision) return;
     vin = DriveDiagVin.parseResponse(await sendCommand('0902', 6500));
     if (!vin) throw new Error('The vehicle did not return a complete VIN.');
-  } catch {
-    if (revision === state.vinRevision) state.vehicleIdentityState = 'fallback';
+  } catch (error) {
+    if (revision === state.vinRevision) {
+      state.vehicleIdentityState = 'fallback';
+      state.vehicleIdentityMessage = 'The VIN could not be read from OBD. Enter year, make and model below.';
+      renderVehicleIdentity();
+    }
     return;
   } finally { state.suspendPolling = false; }
 
@@ -218,16 +234,20 @@ async function identifyVehicleAutomatically() {
     if (state.mode !== 'vehicle' || revision !== state.vinRevision) return;
     state.vehicle = { year: data.year, make: data.make, model: data.model };
     state.vehicleIdentityState = data.partial ? 'fallback' : 'identified';
-    updateConnectionLabel();
+    state.vehicleIdentityMessage = data.partial ? 'The VIN lookup could not identify the model. Enter it below.' : '';
+    renderVehicleIdentity();
   } catch {
     if (state.mode !== 'vehicle' || revision !== state.vinRevision) return;
     state.vehicleIdentityState = 'fallback';
+    state.vehicleIdentityMessage = 'The VIN lookup failed. Enter year, make and model below.';
+    renderVehicleIdentity();
   }
 }
 
 async function inspectConnectedVehicle() {
   if (state.mode !== 'vehicle' || state.vehicleIdentityState !== 'waiting') return;
   state.vehicleIdentityState = 'loading';
+  renderVehicleIdentity();
   await scanCodes();
   if (state.mode === 'vehicle') await identifyVehicleAutomatically();
 }
@@ -386,6 +406,7 @@ function renderCodes() {
       <div class="code-domain"><i class="icon icon-activity-heartbeat" aria-hidden="true"></i>${escapeHtml(item.domain)}</div>
     </article>`).join('') : '<div class="no-codes panel"><div><i class="icon icon-circle-check" aria-hidden="true"></i><h3>No codes found</h3><p>The connected ECU reported no stored or pending trouble codes.</p></div></div>';
   renderSafety();
+  emitAppChange('diagnostics');
 }
 
 function navigate(view, updateHash = true) {
@@ -445,7 +466,7 @@ const UUIDS = {
 
 function updateConnectionLabel() {
   const { make, model } = state.vehicle;
-  const hasVehicleIdentity = state.mode === 'vehicle' && state.vehicleIdentityState === 'identified' && make && model;
+  const hasVehicleIdentity = state.mode === 'vehicle' && ['identified', 'fallback'].includes(state.vehicleIdentityState) && make && model;
   const label = hasVehicleIdentity ? `${make} ${model}` : state.connectionFallbackLabel;
   $('#connectionLabel').textContent = label;
   $('#connectionLabel').title = label;
@@ -1003,6 +1024,39 @@ async function setDemoMode() {
   showToast('Demo telemetry is active.');
 }
 
+function registerWebMcpTools() {
+  const context = document.modelContext;
+  if (!context?.registerTool) return;
+  const report = (error) => console.warn('WebMCP registration failed', error);
+  const tools = [
+    {
+      name: 'navigate_to_obd_section', title: 'Open OBD section', description: 'Open the dashboard, sensors, visualize, or diagnose section in the visible app.',
+      inputSchema: { type: 'object', properties: { section: { type: 'string', enum: ['dashboard', 'sensors', 'visualize', 'diagnose'] } }, required: ['section'], additionalProperties: false },
+      annotations: { readOnlyHint: false, untrustedContentHint: false },
+      execute(input) { if (!input || !['dashboard', 'sensors', 'visualize', 'diagnose'].includes(input.section)) throw new Error('Invalid section'); navigate(input.section); return { section: input.section }; }
+    },
+    {
+      name: 'configure_chart_signals', title: 'Configure live chart', description: 'Choose one to four available sensor IDs to display in the live comparison chart.',
+      inputSchema: { type: 'object', properties: { sensorIds: { type: 'array', minItems: 1, maxItems: 4, items: { type: 'string' } } }, required: ['sensorIds'], additionalProperties: false },
+      annotations: { readOnlyHint: false, untrustedContentHint: false },
+      execute(input) {
+        if (!input || !Array.isArray(input.sensorIds) || input.sensorIds.length < 1 || input.sensorIds.length > 4) throw new Error('Choose one to four sensor IDs.');
+        const unique = [...new Set(input.sensorIds)];
+        if (unique.some((id) => !sensorById(id)?.available)) throw new Error('Every sensor must be available.');
+        state.selected = unique; renderSignalOptions(); navigate('visualize'); drawChart();
+        return { sensorIds: state.selected };
+      }
+    },
+    {
+      name: 'read_current_telemetry', title: 'Read current telemetry', description: 'Read the latest visible values for available vehicle sensors.',
+      inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+      annotations: { readOnlyHint: true, untrustedContentHint: false },
+      execute() { return { source: state.mode, values: Object.fromEntries(SENSOR_DEFS.filter((sensor) => sensor.available).map((sensor) => [sensor.id, { value: state.values[sensor.id], unit: sensor.unit }])) }; }
+    }
+  ];
+  tools.forEach((tool) => { try { Promise.resolve(context.registerTool(tool)).catch(report); } catch (error) { report(error); } });
+}
+
 $$('.nav-item').forEach((item) => item.addEventListener('click', () => navigate(item.dataset.view)));
 $('#mobileMenu').addEventListener('click', () => $('.sidebar').classList.toggle('open'));
 $('#connectButton').addEventListener('click', disconnectDevice);
@@ -1034,6 +1088,7 @@ renderSensorRows();
 renderSignalOptions();
 renderCodes();
 updateLiveValues();
+renderVehicleIdentity();
 setConnectionUI('Not connected', false);
 function updateClock() {
   $('#clock').textContent = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true });
@@ -1042,3 +1097,11 @@ updateClock();
 setInterval(updateClock, 1000);
 setInterval(renderSafety, 2000);
 navigate(['dashboard', 'sensors', 'visualize', 'diagnose'].includes(location.hash.slice(1)) ? location.hash.slice(1) : 'dashboard', false);
+registerWebMcpTools();
+
+window.DriveDiagApp = Object.freeze({
+  state,
+  sensors: SENSOR_DEFS,
+  showToast,
+  refreshConnectionLabel: updateConnectionLabel
+});
