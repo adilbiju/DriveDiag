@@ -16,8 +16,6 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    env:
-      NON_AI_WORKTREE: ${{ runner.temp }}/drivediag-non-ai
     steps:
       - name: Check out main
         uses: actions/checkout@v7
@@ -25,11 +23,15 @@ jobs:
           fetch-depth: 0
 
       - name: Check out the generated branch
+        env:
+          NON_AI_WORKTREE: ${{ runner.temp }}/drivediag-non-ai
         run: |
           git fetch origin non-ai-version
           git worktree add -B non-ai-version "$NON_AI_WORKTREE" origin/non-ai-version
 
       - name: Generate the non-AI tree
+        env:
+          NON_AI_WORKTREE: ${{ runner.temp }}/drivediag-non-ai
         run: node scripts/sync-non-ai.mjs "$NON_AI_WORKTREE"
 
       - name: Set up GitHub Pages
@@ -38,9 +40,11 @@ jobs:
       - name: Upload the generated static site
         uses: actions/upload-pages-artifact@v5
         with:
-          path: ${{ env.NON_AI_WORKTREE }}/public
+          path: ${{ runner.temp }}/drivediag-non-ai/public
 
       - name: Commit and push shared changes
+        env:
+          NON_AI_WORKTREE: ${{ runner.temp }}/drivediag-non-ai
         run: |
           git -C "$NON_AI_WORKTREE" config user.name "github-actions[bot]"
           git -C "$NON_AI_WORKTREE" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
