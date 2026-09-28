@@ -77,9 +77,8 @@ DriveDiag is a diagnostic aid, not a substitute for the vehicle's warnings, a se
 
 ## Branch synchronization
 
-`non-ai-version` is generated from `main` by `.github/workflows/sync-non-ai.yml`. Shared browser and server files are copied as-is. The generator omits `public/ai.js`, `public/ai.css`, and `server-ai.js`, removes blocks enclosed by `AI_ONLY_START` / `AI_ONLY_END` comments from HTML and Markdown files, and deploys the generated `public/` directory to GitHub Pages.
+`non-ai-version` is generated from `main` by `.github/workflows/sync-non-ai.yml`. Shared browser and server files are copied as-is. The generator omits `public/ai.js`, `public/ai.css`, and `server-ai.js`, removes blocks enclosed by `AI_ONLY_START` / `AI_ONLY_END` comments from HTML and Markdown files, and deploys the generated `public/` directory to the GitHub Pages site.
 
-Do not make shared-code edits directly on `non-ai-version`; the next successful sync replaces them. Its branch-specific GitHub Pages workflow is preserved.
 
 ## Project layout
 
