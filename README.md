@@ -1,11 +1,9 @@
 # DriveDiag
 
-DriveDiag is a local web app for viewing OBD-II telemetry from a compatible Bluetooth Low Energy (BLE) adapter. It shows live readings, charts selected sensors, and reads trouble codes.
+DriveDiag is a browser-based vehicle diagnostics tool that connects directly to compatible BLE OBD-II adapters using Web Bluetooth. It provides real-time vehicle telemetry, sensor visualization, diagnostic trouble code scanning, and local vehicle health alerts. An optional AI-assisted diagnostic feature uses trouble codes, sensor data, and vehicle information to suggest possible causes and next troubleshooting steps.
 
-<!-- AI_ONLY_START -->
-The main branch also includes an optional AI-assisted troubleshooting section.
-Checkout a non-AI version of it [here](https://adilbiju.github.io/DriveDiag/).
-<!-- AI_ONLY_END -->
+Checkout a non-AI version of DriveDiag [here](https://adilbiju.github.io/DriveDiag/).
+
 
 ## What it does
 
@@ -58,7 +56,7 @@ AI analysis is user-initiated after a code scan. It can be wrong and has not bee
 - After the vehicle responds, the browser reads its VIN and requests year, make, and model from the **NHTSA vPIC API**.
 <!-- AI_ONLY_START -->
 - The VIN is not included in the Gemini snapshot.
-- Clicking **Analyze snapshot** sends DTCs, recent available sensor values, and year/make/model to the local server and then to the **Gemini API**. The Gemini key remains on the server.
+- Clicking **Analyze snapshot** sends DTCs, recent available sensor values, and year/make/model to the local server and then to the **Gemini API**.
 <!-- AI_ONLY_END -->
 - Generic DTC titles and descriptions are loaded locally from `public/data/dtc-codes.json`. The catalog is derived from the [CC0-licensed OBDex dataset](https://github.com/foerbsnavi/obdex). No code lookup request is sent to an external service.
 
