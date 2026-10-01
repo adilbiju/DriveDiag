@@ -12,10 +12,10 @@ Checkout a non-AI version of DriveDiag [here](https://adilbiju.github.io/DriveDi
 - **Visualize:** chart up to four available signals, with pause and reset controls.
 - **Diagnose:** scan stored and pending diagnostic trouble codes (DTCs).
 - **Vehicle identity:** read the VIN from a responding vehicle and use NHTSA vPIC to display its make and model beside the clock when available.
+- **DTC catalog:** show local titles and short descriptions for 9,533 standardized generic P, B, C, and U codes.
 <!-- AI_ONLY_START -->
 - **AI analysis:** optionally send a diagnostic snapshot to Gemini for possible causes and next checks.
 <!-- AI_ONLY_END -->
-- **DTC catalog:** show local titles and short descriptions for 9,533 standardized generic P, B, C, and U codes.
 
 ## Requirements
 
