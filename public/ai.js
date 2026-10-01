@@ -52,7 +52,7 @@
       idle: ['Not connected', 'Connect an OBD adapter to identify the vehicle automatically.'],
       waiting: ['Waiting for vehicle', 'Turn the ignition on so the adapter can read the vehicle.'],
       loading: ['Identifying vehicle…', 'Reading the VIN from OBD and decoding year, make and model.'],
-      identified: [`${year || ''} ${make} ${model}`.trim(), 'Identified automatically from the vehicle VIN.'],
+      identified: [`${year || ''} ${make} ${model}`.trim(), 'Auto-identified'],
       fallback: ['Vehicle details needed', state.vehicleIdentityMessage || 'Automatic VIN identification was unavailable. Enter year, make and model below.'],
       demo: ['Demo vehicle', 'Synthetic data; no vehicle is connected.']
     };
