@@ -1,6 +1,8 @@
 # DriveDiag
 
-DriveDiag is a local web app for viewing OBD-II telemetry from a compatible Bluetooth Low Energy (BLE) adapter. It shows live readings, charts selected sensors, and reads trouble codes.
+DriveDiag is a browser-based vehicle diagnostics tool that connects directly to compatible BLE OBD-II adapters using Web Bluetooth. It provides real-time vehicle telemetry, sensor visualization, diagnostic trouble code scanning, and local vehicle health alerts. An optional AI-assisted diagnostic feature uses trouble codes, sensor data, and vehicle information to suggest possible causes and next troubleshooting steps.
+
+Checkout a non-AI version of DriveDiag [here](https://adilbiju.github.io/DriveDiag/).
 
 ## What it does
 
